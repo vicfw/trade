@@ -1,3 +1,5 @@
+import type { BtcCandlesResponse } from "./candle"
+
 export interface BtcTicker {
   symbol: string
   price: string
@@ -11,5 +13,6 @@ export interface BtcTicker {
 
 export type WsServerMessage =
   | { type: "ticker"; data: BtcTicker }
+  | { type: "candles"; data: BtcCandlesResponse }
   | { type: "status"; connected: boolean }
   | { type: "error"; message: string }

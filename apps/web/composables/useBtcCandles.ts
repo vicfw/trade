@@ -1,22 +1,16 @@
 import {
   KLINE_INTERVALS,
-  type BtcCandlesResponse,
   type Candle,
   type CandleSeries,
   type KlineInterval,
 } from "@trade/shared"
 
-/** Structure refresh — live close is patched from the ticker on the chart. */
-const POLL_MS = 5_000
-
 export function useBtcCandles() {
-  const config = useRuntimeConfig()
+  const { socketError, subscribe } = useBtcSocket()
   const series = ref<CandleSeries[]>([])
   const activeInterval = ref<KlineInterval>("1h")
-  const pending = ref(false)
+  const pending = ref(true)
   const error = ref<string | null>(null)
-  let pollTimer: ReturnType<typeof setInterval> | null = null
-  let stopped = false
 
   const activeCandles = computed<Candle[]>(() => {
     const match = series.value.find((item) => item.interval === activeInterval.value)
@@ -25,31 +19,16 @@ export function useBtcCandles() {
 
   const lastCandle = computed(() => activeCandles.value.at(-1) ?? null)
 
-  async function refresh() {
-    if (!import.meta.client || stopped) return
+  function applySeries(next: CandleSeries[]) {
+    series.value = next
+    pending.value = false
+    error.value = null
 
-    pending.value = true
-    try {
-      const response = await fetch(`${config.public.apiUrl}/candles/btc`)
-      if (!response.ok) {
-        throw new Error(`Candles request failed (${response.status})`)
-      }
-
-      const payload = (await response.json()) as BtcCandlesResponse
-      series.value = payload.series ?? []
-      error.value = null
-
-      if (
-        series.value.length > 0 &&
-        !series.value.some((item) => item.interval === activeInterval.value)
-      ) {
-        activeInterval.value = series.value[0]!.interval
-      }
-    } catch (err) {
-      error.value =
-        err instanceof Error ? err.message : "Failed to load candles"
-    } finally {
-      pending.value = false
+    if (
+      series.value.length > 0 &&
+      !series.value.some((item) => item.interval === activeInterval.value)
+    ) {
+      activeInterval.value = series.value[0]!.interval
     }
   }
 
@@ -57,29 +36,22 @@ export function useBtcCandles() {
     activeInterval.value = interval
   }
 
-  function startPolling() {
-    if (pollTimer) return
-    pollTimer = setInterval(() => {
-      void refresh()
-    }, POLL_MS)
-  }
-
-  function stopPolling() {
-    if (pollTimer) {
-      clearInterval(pollTimer)
-      pollTimer = null
+  subscribe((message) => {
+    if (message.type === "candles") {
+      applySeries(message.data.series ?? [])
+      return
     }
-  }
 
-  onMounted(() => {
-    stopped = false
-    void refresh()
-    startPolling()
+    if (message.type === "error") {
+      error.value = message.message
+    }
   })
 
-  onUnmounted(() => {
-    stopped = true
-    stopPolling()
+  watch(socketError, (value) => {
+    if (value && series.value.length === 0) {
+      error.value = value
+      pending.value = false
+    }
   })
 
   return {
@@ -90,7 +62,6 @@ export function useBtcCandles() {
     lastCandle,
     pending,
     error,
-    refresh,
     setIntervalTab,
   }
 }

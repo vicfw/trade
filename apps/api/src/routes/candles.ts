@@ -4,6 +4,7 @@ import {
   type BtcCandlesResponse,
 } from "@trade/shared"
 import { config } from "../config"
+import { getBtcCandlesResponse } from "../market/candlesBroadcast"
 import { perpCandleStore } from "../market/tracking"
 
 export const candleRoutes = new Hono()
@@ -44,13 +45,5 @@ candleRoutes.get("/candles/btc", (c) => {
     return c.json(response)
   }
 
-  const response: BtcCandlesResponse = {
-    symbol,
-    series: config.candleIntervals.map((interval) => ({
-      symbol,
-      interval,
-      candles: perpCandleStore.get(interval),
-    })),
-  }
-  return c.json(response)
+  return c.json(getBtcCandlesResponse())
 })

@@ -1,6 +1,7 @@
 import { app, websocket } from "./app"
 import { config } from "./config"
 import { lbankTickerClient } from "./lbank/client"
+import { scheduleCandlesBroadcast } from "./market/candlesBroadcast"
 import { btcPositionTracker } from "./market/positionTracker"
 import { initPositionTracking, perpCandleStore } from "./market/tracking"
 
@@ -27,10 +28,12 @@ lbankTickerClient.onTicker((ticker) => {
   const price = Number(ticker.price)
   if (Number.isFinite(price) && price > 0) {
     perpCandleStore.applyLivePrice(price, ticker.eventTime)
+    scheduleCandlesBroadcast()
   }
 })
 lbankTickerClient.onKline((update) => {
   perpCandleStore.apply(update)
+  scheduleCandlesBroadcast()
 })
 lbankTickerClient.start()
 

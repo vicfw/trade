@@ -27,6 +27,7 @@ fi
 API_APP="${LIARA_API_APP:-trade-api}"
 WEB_APP="${LIARA_WEB_APP:-trade-web}"
 API_DISK="${LIARA_API_DISK:-data:/app/apps/api/data}"
+BUILD_LOCATION="${BUILD_LOCATION:-germany}"
 
 deploy_api() {
   echo "==> Deploying API ($API_APP)…"

@@ -9,7 +9,6 @@ const {
   lastCandle,
   pending,
   error,
-  refresh,
   setIntervalTab,
 } = useBtcCandles();
 

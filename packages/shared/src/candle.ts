@@ -24,7 +24,7 @@ export interface CandleSeries {
   candles: Candle[]
 }
 
-/** Response for GET /candles/btc — all TFs needed for position context */
+/** Multi-TF candle payload — REST GET /candles/btc and WS `{ type: "candles" }` */
 export interface BtcCandlesResponse {
   symbol: string
   series: CandleSeries[]

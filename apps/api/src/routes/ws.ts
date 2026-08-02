@@ -1,4 +1,5 @@
 import type { UpgradeWebSocket } from "hono/ws"
+import { getBtcCandlesResponse } from "../market/candlesBroadcast"
 import { tickerHub } from "../ws/hub"
 import { lbankTickerClient } from "../lbank/client"
 
@@ -16,6 +17,9 @@ export function createWsRoutes(upgradeWebSocket: UpgradeWebSocket) {
       if (latest) {
         ws.send(JSON.stringify({ type: "ticker", data: latest }))
       }
+      ws.send(
+        JSON.stringify({ type: "candles", data: getBtcCandlesResponse() }),
+      )
       console.log(`[ws] client connected (total=${tickerHub.size})`)
     },
     onClose(_event, ws) {
