@@ -144,10 +144,12 @@ body {
 
 .page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 2rem;
+  padding: 1.5rem 0 calc(2rem + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
 }
 
 .page__nav {
@@ -164,10 +166,22 @@ body {
   font-size: 0.85rem;
   font-weight: 600;
   text-decoration: none;
+  padding: 0.35rem 0;
 }
 
 .page__nav-link:hover {
   color: #1a1f16;
   text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding-top: 1rem;
+  }
+
+  .page__nav {
+    padding: 0 1rem;
+    margin-bottom: 0.5rem;
+  }
 }
 </style>

@@ -12,8 +12,6 @@ defineProps<{
 
 <template>
   <section class="risk">
-  
-
     <div class="risk__fields">
       <label class="risk__field">
         <span class="risk__label">Account balance (USDT)</span>
@@ -60,6 +58,7 @@ defineProps<{
   margin: 0 auto;
   padding: 0 1.5rem 0.75rem;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  box-sizing: border-box;
 }
 
 .risk__header {
@@ -89,15 +88,10 @@ defineProps<{
   padding-top: 1rem;
 }
 
-@media (max-width: 640px) {
-  .risk__fields {
-    grid-template-columns: 1fr;
-  }
-}
-
 .risk__field {
   display: grid;
   gap: 0.35rem;
+  min-width: 0;
 }
 
 .risk__label {
@@ -113,9 +107,12 @@ defineProps<{
   background: rgba(255, 255, 255, 0.7);
   color: #1a1f16;
   font: inherit;
-  font-size: 0.95rem;
+  font-size: 1rem;
   padding: 0.55rem 0.65rem;
   border-radius: 0;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.75rem;
 }
 
 .risk__input:focus {
@@ -131,5 +128,17 @@ defineProps<{
 
 .risk__hint--error {
   color: #9b3a2f;
+}
+
+@media (max-width: 720px) {
+  .risk__fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .risk {
+    padding: 0 1rem 0.65rem;
+  }
 }
 </style>

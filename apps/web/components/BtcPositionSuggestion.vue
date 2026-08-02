@@ -326,6 +326,7 @@ const hasSuggestion = computed(() => props.suggestion != null)
   margin: 0 auto;
   padding: 0 1.5rem 1.5rem;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  box-sizing: border-box;
 }
 
 .suggest__header {
@@ -369,6 +370,7 @@ const hasSuggestion = computed(() => props.suggestion != null)
   font-weight: 600;
   padding: 0.55rem 1rem;
   cursor: pointer;
+  min-height: 2.75rem;
 }
 
 .suggest__cta:disabled {
@@ -386,6 +388,7 @@ const hasSuggestion = computed(() => props.suggestion != null)
   font-weight: 600;
   padding: 0.55rem 1rem;
   cursor: pointer;
+  min-height: 2.75rem;
 }
 
 .suggest__delete:disabled {
@@ -434,6 +437,7 @@ const hasSuggestion = computed(() => props.suggestion != null)
   font-weight: 600;
   color: #1a1f16;
   text-transform: capitalize;
+  font-variant-numeric: tabular-nums;
 }
 
 .suggest__grid {
@@ -442,12 +446,6 @@ const hasSuggestion = computed(() => props.suggestion != null)
   gap: 0.75rem;
   margin: 0 0 1.25rem;
   padding: 0;
-}
-
-@media (max-width: 720px) {
-  .suggest__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 .suggest__grid dt {
@@ -463,6 +461,8 @@ const hasSuggestion = computed(() => props.suggestion != null)
   font-size: 0.95rem;
   font-weight: 500;
   color: #1a1f16;
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
 }
 
 .suggest__capped {
@@ -493,6 +493,7 @@ const hasSuggestion = computed(() => props.suggestion != null)
   font-weight: 600;
   padding: 0.45rem 0.9rem;
   cursor: pointer;
+  min-height: 2.5rem;
 }
 
 .suggest__test-cta:disabled {
@@ -502,12 +503,15 @@ const hasSuggestion = computed(() => props.suggestion != null)
 
 .suggest__test-state {
   margin: 0;
+  flex: 1 1 12rem;
+  min-width: 0;
   font-size: 0.9rem;
   color: #1a1f16;
 }
 
 .suggest__test-summary {
   margin: 0;
+  line-height: 1.45;
 }
 
 .suggest__test-source {
@@ -583,6 +587,7 @@ const hasSuggestion = computed(() => props.suggestion != null)
   font-size: 0.95rem;
   line-height: 1.5;
   color: #1a1f16;
+  overflow-wrap: anywhere;
 }
 
 .suggest__warnings {
@@ -610,6 +615,7 @@ const hasSuggestion = computed(() => props.suggestion != null)
   font-size: 0.95rem;
   border-top: 1px solid rgba(26, 31, 22, 0.08);
   padding-top: 1rem;
+  text-align: center;
 }
 
 .suggest__state--error {
@@ -624,7 +630,59 @@ const hasSuggestion = computed(() => props.suggestion != null)
   color: #9b3a2f;
   font: inherit;
   font-size: 0.85rem;
-  padding: 0.35rem 0.75rem;
+  padding: 0.45rem 0.85rem;
   cursor: pointer;
+  min-height: 2.5rem;
+}
+
+@media (max-width: 720px) {
+  .suggest__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .suggest {
+    padding: 0 1rem 2rem;
+  }
+
+  .suggest__header {
+    justify-content: stretch;
+  }
+
+  .suggest__actions {
+    width: 100%;
+  }
+
+  .suggest__cta,
+  .suggest__delete {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+
+  .suggest__meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .suggest__badge {
+    min-width: 0;
+  }
+
+  .suggest__test {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .suggest__test-cta {
+    width: 100%;
+  }
+
+  .suggest__state {
+    min-height: 0;
+    padding: 1rem 0.25rem;
+    font-size: 0.9rem;
+  }
 }
 </style>

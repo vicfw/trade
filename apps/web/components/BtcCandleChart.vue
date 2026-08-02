@@ -271,8 +271,10 @@ onUnmounted(() => {
 
 .chart__title-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.6rem;
+  gap: 0.35rem 0.6rem;
+  min-width: 0;
 }
 
 .chart__title {
@@ -310,6 +312,8 @@ onUnmounted(() => {
   padding: 0.25rem 0.55rem;
   cursor: pointer;
   border-radius: 4px;
+  min-height: 2rem;
+  min-width: 2.5rem;
 }
 
 .chart__tab:hover {
@@ -329,11 +333,40 @@ onUnmounted(() => {
   border-radius: 6px;
   border: 1px solid rgba(26, 31, 22, 0.08);
   background: rgba(255, 255, 255, 0.45);
+  touch-action: pan-x pan-y;
 }
 
 .chart__empty {
   margin: 0.5rem 0 0;
   font-size: 0.8rem;
   color: #7a8470;
+}
+
+@media (max-width: 640px) {
+  .chart {
+    padding: 0 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .chart__header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .chart__tabs {
+    width: 100%;
+  }
+
+  .chart__tab {
+    flex: 1;
+    padding: 0.45rem 0.5rem;
+    text-align: center;
+  }
+
+  .chart__host {
+    height: min(280px, 55vw);
+    min-height: 220px;
+  }
 }
 </style>

@@ -126,12 +126,14 @@ function changeClass(value: string | null) {
   letter-spacing: -0.02em;
   color: #12150f;
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
 .btc__change {
   margin: 0;
   font-size: 0.9rem;
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .btc__change[data-dir="up"] {
@@ -173,12 +175,46 @@ function changeClass(value: string | null) {
   font-size: 0.85rem;
   font-weight: 500;
   color: #1a1f16;
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 640px) {
+  .btc {
+    padding: 0 1rem 0.65rem;
+  }
+
+  .btc__row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: start;
+    gap: 0.35rem 0.75rem;
+  }
+
+  .btc__identity {
+    grid-column: 1;
+  }
+
+  .btc__status {
+    margin-left: 0.15rem;
+  }
+
+  .btc__price {
+    grid-column: 1 / -1;
+    font-size: 1.75rem;
+    margin-top: 0.15rem;
+  }
+
+  .btc__change {
+    grid-column: 1;
+    align-self: end;
+  }
+
   .btc__range {
-    margin-left: 0;
-    width: 100%;
+    grid-column: 2;
+    grid-row: 3;
+    margin: 0;
+    justify-content: flex-end;
+    gap: 0.85rem;
   }
 }
 </style>

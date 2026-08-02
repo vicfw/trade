@@ -89,38 +89,92 @@ function onClear() {
       price.
     </p>
 
-    <div v-else class="history__table-wrap">
-      <table class="history__table">
-        <thead>
-          <tr>
-            <th>Status</th>
-            <th>Side</th>
-            <th>Entry</th>
-            <th>Stop-loss</th>
-            <th>Take-profit</th>
-            <th>Hit</th>
-            <th>Triggered</th>
-            <th>Hit at</th>
-            <th>Suggested at</th>
-            <th>Source</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in records" :key="row.id" :data-status="row.status">
-            <td class="history__status">{{ statusLabel(row.status) }}</td>
-            <td>{{ row.side === "long" ? "Long" : "Short" }}</td>
-            <td>{{ formatPrice(row.entry) }}</td>
-            <td>{{ formatPrice(row.stopLoss) }}</td>
-            <td>{{ formatPrice(row.takeProfit) }}</td>
-            <td>{{ hitLabel(row.hitReason) }}</td>
-            <td>{{ formatDateTime(row.triggeredAt) }}</td>
-            <td>{{ formatDateTime(row.hitAt) }}</td>
-            <td>{{ formatDateTime(row.since) }}</td>
-            <td>{{ sourceLabel(row.priceSource) }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <template v-else>
+      <div class="history__table-wrap">
+        <table class="history__table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Side</th>
+              <th>Entry</th>
+              <th>Stop-loss</th>
+              <th>Take-profit</th>
+              <th>Hit</th>
+              <th>Triggered</th>
+              <th>Hit at</th>
+              <th>Suggested at</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in records" :key="row.id" :data-status="row.status">
+              <td class="history__status">{{ statusLabel(row.status) }}</td>
+              <td>{{ row.side === "long" ? "Long" : "Short" }}</td>
+              <td>{{ formatPrice(row.entry) }}</td>
+              <td>{{ formatPrice(row.stopLoss) }}</td>
+              <td>{{ formatPrice(row.takeProfit) }}</td>
+              <td>{{ hitLabel(row.hitReason) }}</td>
+              <td>{{ formatDateTime(row.triggeredAt) }}</td>
+              <td>{{ formatDateTime(row.hitAt) }}</td>
+              <td>{{ formatDateTime(row.since) }}</td>
+              <td>{{ sourceLabel(row.priceSource) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <ul class="history__cards" aria-label="Trade history">
+        <li
+          v-for="row in records"
+          :key="`card-${row.id}`"
+          class="history__card"
+          :data-status="row.status"
+        >
+          <div class="history__card-top">
+            <span class="history__status">{{ statusLabel(row.status) }}</span>
+            <span class="history__card-side">{{
+              row.side === "long" ? "Long" : "Short"
+            }}</span>
+          </div>
+          <dl class="history__card-grid">
+            <div>
+              <dt>Entry</dt>
+              <dd>{{ formatPrice(row.entry) }}</dd>
+            </div>
+            <div>
+              <dt>Stop-loss</dt>
+              <dd>{{ formatPrice(row.stopLoss) }}</dd>
+            </div>
+            <div>
+              <dt>Take-profit</dt>
+              <dd>{{ formatPrice(row.takeProfit) }}</dd>
+            </div>
+            <div>
+              <dt>Hit</dt>
+              <dd>{{ hitLabel(row.hitReason) }}</dd>
+            </div>
+          </dl>
+          <div class="history__card-meta">
+            <p>
+              <span class="history__card-label">Triggered</span>
+              {{ formatDateTime(row.triggeredAt) }}
+            </p>
+            <p>
+              <span class="history__card-label">Hit at</span>
+              {{ formatDateTime(row.hitAt) }}
+            </p>
+            <p>
+              <span class="history__card-label">Suggested</span>
+              {{ formatDateTime(row.since) }}
+            </p>
+            <p>
+              <span class="history__card-label">Source</span>
+              {{ sourceLabel(row.priceSource) }}
+            </p>
+          </div>
+        </li>
+      </ul>
+    </template>
   </main>
 </template>
 
@@ -137,10 +191,11 @@ body {
 
 .page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 2rem 1rem 3rem;
+  padding: 2rem 1rem calc(3rem + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
@@ -155,6 +210,7 @@ body {
   color: #4a5540;
   font-size: 0.9rem;
   text-decoration: none;
+  padding: 0.25rem 0;
 }
 
 .history__back:hover {
@@ -185,8 +241,9 @@ body {
   font: inherit;
   font-size: 0.8rem;
   font-weight: 600;
-  padding: 0.35rem 0.75rem;
+  padding: 0.45rem 0.85rem;
   cursor: pointer;
+  min-height: 2.5rem;
 }
 
 .history__refresh:disabled {
@@ -198,6 +255,8 @@ body {
   margin: 0 0 1rem;
   color: #7a8470;
   font-size: 0.9rem;
+  line-height: 1.45;
+  max-width: 40rem;
 }
 
 .history__clear {
@@ -210,6 +269,7 @@ body {
   font-weight: 600;
   padding: 0.45rem 0.9rem;
   cursor: pointer;
+  min-height: 2.5rem;
 }
 
 .history__clear:disabled {
@@ -222,6 +282,7 @@ body {
   width: min(1100px, 100%);
   margin: 0;
   font-size: 0.95rem;
+  line-height: 1.45;
 }
 
 .history__empty {
@@ -235,6 +296,7 @@ body {
 .history__table-wrap {
   width: min(1100px, 100%);
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .history__table {
@@ -250,6 +312,7 @@ body {
   text-align: left;
   border-bottom: 1px solid rgba(26, 31, 22, 0.1);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .history__table th {
@@ -267,11 +330,117 @@ body {
   font-size: 0.8rem;
 }
 
-.history__table tr[data-status="successful"] .history__status {
+.history__table tr[data-status="successful"] .history__status,
+.history__card[data-status="successful"] .history__status {
   color: #2f6b3a;
 }
 
-.history__table tr[data-status="failed"] .history__status {
+.history__table tr[data-status="failed"] .history__status,
+.history__card[data-status="failed"] .history__status {
   color: #9b3a2f;
+}
+
+.history__cards {
+  display: none;
+  width: min(1100px, 100%);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history__card {
+  padding: 1rem 0;
+  border-bottom: 1px solid rgba(26, 31, 22, 0.1);
+}
+
+.history__card:first-child {
+  border-top: 1px solid rgba(26, 31, 22, 0.1);
+}
+
+.history__card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.history__card-side {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1a1f16;
+}
+
+.history__card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem 1rem;
+  margin: 0 0 0.85rem;
+  padding: 0;
+}
+
+.history__card-grid dt {
+  margin: 0 0 0.15rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #7a8470;
+}
+
+.history__card-grid dd {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #1a1f16;
+  font-variant-numeric: tabular-nums;
+}
+
+.history__card-meta {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.history__card-meta p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #1a1f16;
+  line-height: 1.4;
+}
+
+.history__card-label {
+  display: inline-block;
+  min-width: 5.5rem;
+  color: #7a8470;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 720px) {
+  .page {
+    padding-top: 1.25rem;
+  }
+
+  .history__title {
+    font-size: 1.25rem;
+  }
+
+  .history__title-row {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .history__clear {
+    width: 100%;
+  }
+
+  .history__table-wrap {
+    display: none;
+  }
+
+  .history__cards {
+    display: block;
+  }
 }
 </style>
