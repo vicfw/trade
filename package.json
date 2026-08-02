@@ -1,0 +1,13 @@
+{
+  "name": "trade",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "bun run --filter './apps/*' dev",
+    "dev:api": "bun run --filter @trade/api dev",
+    "dev:web": "bun run --filter @trade/web dev",
+    "build": "bun run --filter @trade/shared build && bun run --filter @trade/market build && bun run --filter @trade/api build && bun run --filter @trade/web build",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun run --filter @trade/market test && bun run --filter @trade/api test"
+  }
+}

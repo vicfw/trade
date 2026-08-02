@@ -1,0 +1,35 @@
+# Dependencies & build output
+node_modules
+**/node_modules
+**/dist
+**/.nuxt
+**/.output
+**/.data
+**/.cache
+*.tsbuildinfo
+
+# Local / secrets (set env in Liara console)
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Runtime data & logs (use Liara disk for SQLite)
+**/data/*.db
+**/data/*.db-*
+logs
+**/*.log
+
+# Git / editor / agent
+.git
+.cursor
+.gitignore
+*.md
+
+# Misc
+.DS_Store
+.dockerignore
+liara.json
+**/liara.json

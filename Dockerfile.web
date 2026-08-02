@@ -1,0 +1,45 @@
+# Liara / Docker image for @trade/web (Nuxt 3 SSR)
+FROM oven/bun:1.2 AS build
+
+WORKDIR /app
+
+# Workspace manifests first (better layer cache)
+COPY package.json bun.lock bunfig.toml tsconfig.base.json ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/market/package.json ./packages/market/
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+
+# Install web + shared only (skip API / market runtime deps)
+RUN bun install --frozen-lockfile --filter @trade/web --filter @trade/shared
+
+COPY packages/shared ./packages/shared
+COPY apps/web ./apps/web
+
+# Optional bake-in at build time (Liara: --build-arg). Runtime ENV also works for SSR.
+ARG NUXT_PUBLIC_API_URL=http://localhost:3001
+ARG NUXT_PUBLIC_WS_URL=ws://localhost:3001/ws/btc
+ENV NUXT_PUBLIC_API_URL=$NUXT_PUBLIC_API_URL
+ENV NUXT_PUBLIC_WS_URL=$NUXT_PUBLIC_WS_URL
+ENV NODE_ENV=production
+
+WORKDIR /app/apps/web
+RUN bun run build
+
+# --- runtime ---
+FROM oven/bun:1.2
+
+WORKDIR /app
+
+COPY --from=build /app/apps/web/.output ./.output
+
+ENV NODE_ENV=production
+ENV HOST=0.0.0.0
+ENV PORT=3000
+# Override these in Liara env (SSR reads NUXT_PUBLIC_* at runtime)
+ENV NUXT_PUBLIC_API_URL=http://localhost:3001
+ENV NUXT_PUBLIC_WS_URL=ws://localhost:3001/ws/btc
+
+EXPOSE 3000
+
+CMD ["bun", ".output/server/index.mjs"]
