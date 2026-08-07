@@ -124,4 +124,87 @@ describe("multi-tf context helpers", () => {
     };
     expect(computeStructure1h(indicators)).toBe("uptrend");
   });
+
+  test("structure1h downtrend on LH + LL when price stays inside last swing", () => {
+    const indicators: IntervalIndicators = {
+      ema20: null,
+      ema50: null,
+      ema200: null,
+      rsi14: null,
+      atr14: null,
+      lastClose: 95,
+      openTime: 5,
+      swings: [
+        { kind: "high", index: 1, openTime: 1, price: 120 },
+        { kind: "low", index: 2, openTime: 2, price: 90 },
+        { kind: "high", index: 3, openTime: 3, price: 110 },
+        { kind: "low", index: 4, openTime: 4, price: 80 },
+      ],
+    };
+    expect(computeStructure1h(indicators)).toBe("downtrend");
+  });
+
+  test("structure1h flips to uptrend on bullish break of structure", () => {
+    // Last confirmed pivots are LH+LL (local downtrend), but price reclaimed
+    // above the latest swing high — the production chart failure mode.
+    const indicators: IntervalIndicators = {
+      ema20: null,
+      ema50: null,
+      ema200: null,
+      rsi14: null,
+      atr14: null,
+      lastClose: 64_800,
+      openTime: 5,
+      swings: [
+        { kind: "high", index: 1, openTime: 1, price: 65_200 },
+        { kind: "low", index: 2, openTime: 2, price: 63_500 },
+        { kind: "high", index: 3, openTime: 3, price: 64_961.9 },
+        { kind: "low", index: 4, openTime: 4, price: 63_200 },
+      ],
+    };
+    expect(computeStructure1h(indicators)).toBe("downtrend");
+    expect(computeStructure1h(indicators, 65_333.8)).toBe("uptrend");
+    expect(computeStructure1h({ ...indicators, lastClose: 65_100 })).toBe(
+      "uptrend",
+    );
+  });
+
+  test("structure1h flips to downtrend on bearish break of structure", () => {
+    const indicators: IntervalIndicators = {
+      ema20: null,
+      ema50: null,
+      ema200: null,
+      rsi14: null,
+      atr14: null,
+      lastClose: 105,
+      openTime: 5,
+      swings: [
+        { kind: "high", index: 1, openTime: 1, price: 100 },
+        { kind: "low", index: 2, openTime: 2, price: 80 },
+        { kind: "high", index: 3, openTime: 3, price: 120 },
+        { kind: "low", index: 4, openTime: 4, price: 90 },
+      ],
+    };
+    expect(computeStructure1h(indicators)).toBe("uptrend");
+    expect(computeStructure1h(indicators, 85)).toBe("downtrend");
+  });
+
+  test("structure1h range on mixed HH + LL", () => {
+    const indicators: IntervalIndicators = {
+      ema20: null,
+      ema50: null,
+      ema200: null,
+      rsi14: null,
+      atr14: null,
+      lastClose: 105,
+      openTime: 5,
+      swings: [
+        { kind: "high", index: 1, openTime: 1, price: 100 },
+        { kind: "low", index: 2, openTime: 2, price: 90 },
+        { kind: "high", index: 3, openTime: 3, price: 120 },
+        { kind: "low", index: 4, openTime: 4, price: 80 },
+      ],
+    };
+    expect(computeStructure1h(indicators)).toBe("range");
+  });
 });

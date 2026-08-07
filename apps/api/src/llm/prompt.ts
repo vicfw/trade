@@ -9,6 +9,7 @@ Snapshot conventions:
 - For each interval, currentCandle is the in-progress bar with c synced to ticker.price when the ticker is present. recentCandles and indicators use completed candles only.
 - recentCandles are oldest to newest. Compact keys are t=Unix ms open time, o=open, h=high, l=low, c=close, v=volume.
 - EMA, RSI, ATR, and swings are deterministic from closed candles. ATR is a price distance, not a percentage.
+- context.structure1h is deterministic from 1h swings: break-of-structure when price is beyond the latest 1h swing high/low, else HH+HL / LH+LL. Trust that label; do not keep calling it a downtrend after a bullish reclaim.
 - Treat null values and snapshot warnings as missing evidence; never fill them in.
 - Do not treat a stale completed lastClose as the live market price when ticker.price / currentCandle.c are present.
 

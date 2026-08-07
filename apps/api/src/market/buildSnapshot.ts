@@ -137,7 +137,7 @@ export function buildMarketSnapshot(input: {
       eventTime: input.ticker?.eventTime ?? null,
     },
     intervals,
-    context: computeMultiTfContext(byInterval),
+    context: computeMultiTfContext(byInterval, livePrice),
     warnings,
   };
 }

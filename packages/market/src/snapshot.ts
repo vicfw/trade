@@ -12,7 +12,29 @@ import { lastFinite, toCloses, toOhlc } from "./ohlc";
 import { rsi } from "./rsi";
 import { findSwings } from "./swings";
 
-const SWING_TAIL = 5;
+/** Keep enough pivots for structure + LLM level context. */
+const SWING_TAIL = 8;
+
+function sortSwingsAsc<T extends { index: number; openTime: number }>(
+  swings: T[],
+): T[] {
+  return swings
+    .slice()
+    .sort((a, b) => a.index - b.index || a.openTime - b.openTime);
+}
+
+function resolveStructurePrice(
+  indicators: IntervalIndicators,
+  referencePrice?: number | null,
+): number | null {
+  if (referencePrice != null && Number.isFinite(referencePrice)) {
+    return referencePrice;
+  }
+  if (indicators.lastClose != null && Number.isFinite(indicators.lastClose)) {
+    return indicators.lastClose;
+  }
+  return null;
+}
 
 export function computeIntervalIndicators(
   candles: Candle[],
@@ -58,11 +80,23 @@ export function computeBias4h(indicators: IntervalIndicators): MarketBias {
   return "neutral";
 }
 
+/**
+ * 1h market structure from swing pivots.
+ *
+ * Priority:
+ * 1. Break of structure — price beyond the latest swing high/low (fixes
+ *    "obvious uptrend" cases where the last confirmed pair is still LH+LL)
+ * 2. Classic last-two HH+HL / LH+LL
+ * 3. Mixed pairs → range
+ */
 export function computeStructure1h(
   indicators: IntervalIndicators,
+  referencePrice?: number | null,
 ): MarketStructure {
-  const highs = indicators.swings.filter((s) => s.kind === "high");
-  const lows = indicators.swings.filter((s) => s.kind === "low");
+  const highs = sortSwingsAsc(
+    indicators.swings.filter((s) => s.kind === "high"),
+  );
+  const lows = sortSwingsAsc(indicators.swings.filter((s) => s.kind === "low"));
 
   if (highs.length < 2 || lows.length < 2) return "unclear";
 
@@ -70,6 +104,12 @@ export function computeStructure1h(
   const h2 = highs.at(-1)!;
   const l1 = lows.at(-2)!;
   const l2 = lows.at(-1)!;
+
+  const price = resolveStructurePrice(indicators, referencePrice);
+  if (price != null) {
+    if (price > h2.price) return "uptrend";
+    if (price < l2.price) return "downtrend";
+  }
 
   const higherHighs = h2.price > h1.price;
   const higherLows = l2.price > l1.price;
@@ -84,10 +124,11 @@ export function computeStructure1h(
 
 export function computeMultiTfContext(
   byInterval: Partial<Record<KlineInterval, IntervalIndicators>>,
+  referencePrice?: number | null,
 ): MultiTfContext {
   const bias4h = byInterval["4h"] ? computeBias4h(byInterval["4h"]) : "neutral";
   const structure1h = byInterval["1h"]
-    ? computeStructure1h(byInterval["1h"])
+    ? computeStructure1h(byInterval["1h"], referencePrice)
     : "unclear";
 
   return { bias4h, structure1h };
