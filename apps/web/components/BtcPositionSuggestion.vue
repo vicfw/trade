@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type {
-  BtcPositionTestResponse,
-  PositionSuggestion,
-  SuggestionConfidence,
-  TradeSide,
+import {
+  parseNoTradeRationale,
+  type BtcPositionTestResponse,
+  type PositionSuggestion,
+  type SuggestionConfidence,
+  type TradeSide,
 } from "@trade/shared"
 
 const props = defineProps<{
@@ -101,6 +102,12 @@ function confidenceLabel(c: SuggestionConfidence) {
 }
 
 const hasSuggestion = computed(() => props.suggestion != null)
+
+const noTradeParts = computed(() => {
+  const current = props.suggestion
+  if (!current || current.side !== "no_trade") return null
+  return parseNoTradeRationale(current.rationale)
+})
 </script>
 
 <template>
@@ -233,7 +240,7 @@ const hasSuggestion = computed(() => props.suggestion != null)
         </div>
       </dl>
 
-      <div class="suggest__test">
+      <div v-if="suggestion.side !== 'no_trade'" class="suggest__test">
         <button
           type="button"
           class="suggest__test-cta"
@@ -307,8 +314,20 @@ const hasSuggestion = computed(() => props.suggestion != null)
       </div>
 
       <div class="suggest__rationale">
-        <h3 class="suggest__rationale-title">Rationale</h3>
-        <p>{{ suggestion.rationale }}</p>
+        <h3 class="suggest__rationale-title">
+          {{ suggestion.side === "no_trade" ? "Why no trade" : "Rationale" }}
+        </h3>
+        <template v-if="suggestion.side === 'no_trade' && noTradeParts">
+          <p class="suggest__rationale-block">
+            <span class="suggest__rationale-label">Failed</span>
+            {{ noTradeParts.failed }}
+          </p>
+          <p class="suggest__rationale-block">
+            <span class="suggest__rationale-label">Watch</span>
+            {{ noTradeParts.watch }}
+          </p>
+        </template>
+        <p v-else>{{ suggestion.rationale }}</p>
       </div>
 
       <ul v-if="suggestion.warnings.length" class="suggest__warnings">
@@ -588,6 +607,20 @@ const hasSuggestion = computed(() => props.suggestion != null)
   line-height: 1.5;
   color: #1a1f16;
   overflow-wrap: anywhere;
+}
+
+.suggest__rationale-block + .suggest__rationale-block {
+  margin-top: 0.65rem;
+}
+
+.suggest__rationale-label {
+  display: inline-block;
+  margin-right: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5c6558;
 }
 
 .suggest__warnings {

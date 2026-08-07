@@ -1,12 +1,13 @@
-import type {
-  IntervalIndicators,
-  LlmPositionProposal,
-  MarketBias,
-  MarketStructure,
-  PositionLevels,
-  PositionSizing,
-  PositionSuggestion,
-  RiskRules,
+import {
+  formatNoTradeRationale,
+  type IntervalIndicators,
+  type LlmPositionProposal,
+  type MarketBias,
+  type MarketStructure,
+  type PositionLevels,
+  type PositionSizing,
+  type PositionSuggestion,
+  type RiskRules,
 } from "@trade/shared"
 import {
   countEntrySignals,
@@ -119,15 +120,30 @@ export interface FinalizeSuggestionContext {
 function noTradeResult(
   proposal: LlmPositionProposal,
   warnings: string[],
+  rationale = proposal.rationale,
 ): PositionSuggestion {
   return {
     side: "no_trade",
     levels: null,
     sizing: null,
     confidence: proposal.confidence,
-    rationale: proposal.rationale,
+    rationale,
     warnings,
   }
+}
+
+/** Policy reject: Failed/Watch lives in rationale; warnings are extras only. */
+function downgradeNoTrade(
+  proposal: LlmPositionProposal,
+  failed: string,
+  watch: string,
+  warnings: string[] = [],
+): PositionSuggestion {
+  return noTradeResult(
+    proposal,
+    warnings,
+    formatNoTradeRationale(failed, watch),
+  )
 }
 
 /**
@@ -146,18 +162,25 @@ export function finalizeSuggestion(
     proposal.takeProfit,
   )
 
-  if (proposal.side === "no_trade" || warnings.length > 0) {
-    const extra =
-      proposal.side !== "no_trade" && warnings.length > 0
-        ? ["Downgraded to no_trade due to invalid trade geometry"]
-        : []
-    return noTradeResult(proposal, [...warnings, ...extra])
+  if (proposal.side === "no_trade") {
+    return noTradeResult(proposal, warnings)
+  }
+
+  if (warnings.length > 0) {
+    return downgradeNoTrade(
+      proposal,
+      `Invalid ${proposal.side} geometry (${warnings[0]}).`,
+      "Re-analyze when entry, stop-loss, and take-profit form valid long (SL < entry < TP) or short (TP < entry < SL) levels from the live snapshot.",
+      warnings,
+    )
   }
 
   if (isMultiTfOpposed(ctx.bias4h, ctx.structure1h)) {
-    return noTradeResult(proposal, [
-      `Downgraded to no_trade: 4h bias (${ctx.bias4h}) opposes 1h structure (${ctx.structure1h})`,
-    ])
+    return downgradeNoTrade(
+      proposal,
+      `4h bias (${ctx.bias4h}) opposes 1h structure (${ctx.structure1h}).`,
+      "Re-check after 4h bias and 1h structure agree, or after 4h turns neutral with a clear directional 1h structure.",
+    )
   }
 
   if (
@@ -167,16 +190,20 @@ export function finalizeSuggestion(
       ctx.structure1h,
     )
   ) {
-    return noTradeResult(proposal, [
-      `Downgraded to no_trade: ${proposal.side} conflicts with aligned ${ctx.bias4h} / ${ctx.structure1h}`,
-    ])
+    return downgradeNoTrade(
+      proposal,
+      `${proposal.side} conflicts with aligned 4h ${ctx.bias4h} / 1h ${ctx.structure1h}.`,
+      `Re-check when multi-TF context supports a ${proposal.side}, or when bias/structure stop fighting that side.`,
+    )
   }
 
   const signals = countEntrySignals(proposal.side, ctx.entryIndicators)
   if (signals.count < MIN_ENTRY_SIGNALS) {
-    return noTradeResult(proposal, [
-      `Downgraded to no_trade: only ${signals.count}/${MIN_ENTRY_SIGNALS} required 15m confirmations (ema20=${signals.flags.priceVsEma20}, ema50=${signals.flags.priceVsEma50}, rsi=${signals.flags.rsiSide}, swingBreak=${signals.flags.swingBreak})`,
-    ])
+    return downgradeNoTrade(
+      proposal,
+      `Only ${signals.count}/${MIN_ENTRY_SIGNALS} required 15m confirmations (ema20=${signals.flags.priceVsEma20}, ema50=${signals.flags.priceVsEma50}, rsi=${signals.flags.rsiSide}, swingBreak=${signals.flags.swingBreak}).`,
+      `Re-check on a 15m close with at least two of: price on the ${proposal.side} side of EMA20 and EMA50, RSI on the ${proposal.side} side of 50, or a confirming swing break.`,
+    )
   }
 
   let levels: PositionLevels = {
@@ -196,11 +223,12 @@ export function finalizeSuggestion(
     levels.takeProfit,
   )
   if (postSnapGeo.length > 0) {
-    return noTradeResult(proposal, [
-      ...warnings,
-      ...postSnapGeo,
-      "Downgraded to no_trade due to invalid trade geometry after snap",
-    ])
+    return downgradeNoTrade(
+      proposal,
+      `Levels became invalid after snapping to 15m swings (${postSnapGeo[0]}).`,
+      "Re-analyze when a nearby swing invalidation and target still leave valid long/short geometry after ATR buffering.",
+      [...warnings, ...postSnapGeo],
+    )
   }
 
   if (
@@ -212,10 +240,14 @@ export function finalizeSuggestion(
       atr != null && atr > 0
         ? `stop distance ${distance.toFixed(2)} exceeds ${MAX_STOP_ATR_MULT}×ATR (${(MAX_STOP_ATR_MULT * atr).toFixed(2)})`
         : "15m ATR unavailable; cannot verify stop width"
-    return noTradeResult(proposal, [
-      ...warnings,
-      `Downgraded to no_trade: ${detail}`,
-    ])
+    return downgradeNoTrade(
+      proposal,
+      `${detail.charAt(0).toUpperCase()}${detail.slice(1)}.`,
+      atr != null && atr > 0
+        ? `Re-check when stop distance is ≤ ${(MAX_STOP_ATR_MULT * atr).toFixed(2)} (2×15m ATR), e.g. a closer invalidation swing.`
+        : "Re-check once 15m ATR is available and stop distance stays within 2×ATR of entry.",
+      warnings,
+    )
   }
 
   const riskReward = computeRiskReward(
@@ -225,10 +257,13 @@ export function finalizeSuggestion(
     levels.takeProfit,
   )
   if (riskReward == null || riskReward < MIN_RISK_REWARD) {
-    return noTradeResult(proposal, [
-      ...warnings,
-      `Downgraded to no_trade: reward/risk ${riskReward == null ? "n/a" : riskReward.toFixed(2)} is below ${MIN_RISK_REWARD}`,
-    ])
+    const rrLabel = riskReward == null ? "n/a" : riskReward.toFixed(2)
+    return downgradeNoTrade(
+      proposal,
+      `Reward/risk ${rrLabel} is below the required ${MIN_RISK_REWARD}.`,
+      `Re-check when a technically valid target/stop pair yields reward/risk ≥ ${MIN_RISK_REWARD}.`,
+      warnings,
+    )
   }
 
   const sizing = enforcePositionSizing(levels, rules)

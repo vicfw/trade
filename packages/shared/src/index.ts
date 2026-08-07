@@ -34,3 +34,7 @@ export type {
   TradeHistoryEntry,
   BtcTradeHistoryResponse,
 } from "./position";
+export {
+  formatNoTradeRationale,
+  parseNoTradeRationale,
+} from "./position";

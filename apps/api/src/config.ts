@@ -14,7 +14,7 @@ const LLM_PROVIDER_DEFAULTS: Record<
 > = {
   gapgpt: {
     baseUrl: "https://api.gapgpt.app/v1",
-    model: "gemini-2.5-flash-lite",
+    model: "deepseek-r1",
     apiKeyEnv: "GAPGPT_API_KEY",
   },
   moonshot: {
@@ -131,7 +131,8 @@ export const config = {
   candleIntervals: parseIntervals(process.env.CANDLE_INTERVALS),
   /** Active LLM backend: gapgpt or moonshot (Kimi). */
   llm,
-  llmTimeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 45_000),
+  /** deepseek-r1 and other reasoning models often need 1–3+ minutes. */
+  llmTimeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 180_000),
   llmCandleWindow: Number(process.env.LLM_CANDLE_WINDOW ?? 60),
   suggestCooldownMs: Number(process.env.SUGGEST_COOLDOWN_MS ?? 15_000),
 } as const;

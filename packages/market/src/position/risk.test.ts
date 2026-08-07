@@ -219,7 +219,11 @@ describe("finalizeSuggestion", () => {
     expect(result.side).toBe("no_trade")
     expect(result.levels).toBeNull()
     expect(result.sizing).toBeNull()
-    expect(result.warnings.some((w) => /Downgraded/.test(w))).toBe(true)
+    expect(result.warnings.some((w) => /stopLoss < entry < takeProfit/.test(w))).toBe(
+      true,
+    )
+    expect(result.rationale).toMatch(/^Failed:.*geometry/i)
+    expect(result.rationale).toMatch(/\nWatch:/)
   })
 
   test("no_trade returns null sizing", () => {
@@ -261,7 +265,8 @@ describe("finalizeSuggestion", () => {
       },
     )
     expect(result.side).toBe("no_trade")
-    expect(result.warnings.some((w) => /reward\/risk/.test(w))).toBe(true)
+    expect(result.rationale).toMatch(/^Failed:.*reward\/risk/i)
+    expect(result.rationale).toMatch(/\nWatch:/)
   })
 
   test("rejects multi-TF opposition", () => {
@@ -278,7 +283,9 @@ describe("finalizeSuggestion", () => {
       { ...neutralCtx, bias4h: "bull", structure1h: "downtrend" },
     )
     expect(result.side).toBe("no_trade")
-    expect(result.warnings.some((w) => /opposes/.test(w))).toBe(true)
+    expect(result.warnings).toEqual([])
+    expect(result.rationale).toMatch(/^Failed:.*opposes/i)
+    expect(result.rationale).toMatch(/\nWatch:/)
   })
 
   test("rejects side fighting aligned context", () => {
@@ -295,9 +302,9 @@ describe("finalizeSuggestion", () => {
       { ...neutralCtx, bias4h: "bull", structure1h: "uptrend" },
     )
     expect(result.side).toBe("no_trade")
-    expect(result.warnings.some((w) => /conflicts with aligned/.test(w))).toBe(
-      true,
-    )
+    expect(result.warnings).toEqual([])
+    expect(result.rationale).toMatch(/^Failed:.*conflicts with aligned/i)
+    expect(result.rationale).toMatch(/\nWatch:/)
   })
 
   test("rejects fewer than two 15m confirmations", () => {
@@ -327,9 +334,9 @@ describe("finalizeSuggestion", () => {
       },
     )
     expect(result.side).toBe("no_trade")
-    expect(
-      result.warnings.some((w) => /15m confirmations/.test(w)),
-    ).toBe(true)
+    expect(result.warnings).toEqual([])
+    expect(result.rationale).toMatch(/^Failed:.*15m confirmations/i)
+    expect(result.rationale).toMatch(/\nWatch:/)
   })
 
   test("rejects stop wider than 2x ATR after snap", () => {
@@ -363,7 +370,8 @@ describe("finalizeSuggestion", () => {
     )
     // snap SL ≈ 98975 → distance ~1025 > 2*100
     expect(result.side).toBe("no_trade")
-    expect(result.warnings.some((w) => /2×ATR|2xATR|ATR/.test(w))).toBe(true)
+    expect(result.rationale).toMatch(/^Failed:.*(?:2×ATR|ATR)/i)
+    expect(result.rationale).toMatch(/\nWatch:/)
   })
 
   test("snaps levels then sizes", () => {

@@ -112,6 +112,10 @@ suggestRoutes.post("/suggest/btc", async (c) => {
   }
 
   inFlight = true;
+  const startedAt = Date.now();
+  console.log(
+    `[suggest] start provider=${config.llm.provider} model=${config.llm.model} timeoutMs=${config.llmTimeoutMs} price=${snapshot.ticker.price} bias4h=${snapshot.context.bias4h} structure1h=${snapshot.context.structure1h}`,
+  );
   try {
     logLlmSnapshot(snapshot);
     const proposal = await llmClient.suggestPosition(snapshot);
@@ -159,11 +163,16 @@ suggestRoutes.post("/suggest/btc", async (c) => {
       },
     };
 
+    console.log(
+      `[suggest] ok elapsedMs=${Date.now() - startedAt} side=${suggestion.side} confidence=${suggestion.confidence} warnings=${suggestion.warnings.length}`,
+    );
     return c.json(response);
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Suggestion request failed";
-    console.error(`[suggest] ${message}`);
+    console.error(
+      `[suggest] failed elapsedMs=${Date.now() - startedAt} provider=${config.llm.provider} model=${config.llm.model}: ${message}`,
+    );
     return c.json({ error: message }, 502);
   } finally {
     inFlight = false;

@@ -2,6 +2,25 @@ export type TradeSide = "long" | "short" | "no_trade"
 
 export type SuggestionConfidence = "low" | "medium" | "high"
 
+/** Canonical no_trade rationale shape (Failed + Watch). */
+export function formatNoTradeRationale(failed: string, watch: string): string {
+  return `Failed: ${failed.trim()}\nWatch: ${watch.trim()}`
+}
+
+/** Parse Failed/Watch no_trade rationales; null if the shape is missing. */
+export function parseNoTradeRationale(
+  text: string,
+): { failed: string; watch: string } | null {
+  const match = text.match(
+    /^\s*Failed:\s*([\s\S]+?)\s+Watch:\s*([\s\S]+?)\s*$/i,
+  )
+  if (!match?.[1] || !match[2]) return null
+  const failed = match[1].trim()
+  const watch = match[2].trim()
+  if (!failed || !watch) return null
+  return { failed, watch }
+}
+
 export interface RiskRules {
   accountBalanceUsdt: number
   maxRiskPercent: number

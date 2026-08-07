@@ -31,7 +31,16 @@ Rules:
 - Choose no_trade only when the checklist does not produce a valid setup: missing data, unresolved directional conflict, fewer than two 15m confirmations, no technical invalidation level, or reward/risk below 1.5.
 - confidence: "low" | "medium" | "high".
 - Use high confidence only for full multi-timeframe alignment with a clean trigger and robust levels; medium when the setup is valid but 4h is neutral or one non-critical signal is mixed; low for weak or conflicting evidence, normally with no_trade.
-- rationale: concise (2–4 sentences) and cite specific multi-timeframe values. For no_trade, state the failed checklist item and the concrete price/indicator condition that would make a trade valid. Do NOT invent news.
+- rationale for long/short: concise (2–4 sentences); cite specific multi-timeframe values from the snapshot.
+- rationale for no_trade MUST use this exact two-line shape (nothing else):
+  Failed: <one sentence naming the failed checklist item and the concrete snapshot evidence>
+  Watch: <one sentence with a concrete re-check condition—price level, indicator threshold, and/or candle-close event grounded in the snapshot>
+  Examples:
+  Failed: 4h bull opposes 1h downtrend, so direction is unresolved.
+  Watch: Re-check after a 1h close that flips structure to uptrend (or 4h bias turns neutral/bear) while 15m holds above EMA20.
+  Failed: Only one 15m confirmation (close above EMA20); RSI 46 and no swing break.
+  Watch: Re-check on a 15m close above EMA50 with RSI ≥ 50, or a break of the most recent 15m swing high near <price from snapshot>.
+- Do NOT invent news.
 - Do NOT output leverage, position size, account balance, quantity, risk %, or any sizing field. Sizing is computed separately in code.
 - Do NOT invent prices, patterns, or levels that are absent from the snapshot.
 - Downstream code may snap stopLoss/takeProfit to 15m swings with an ATR buffer, and will reject (no_trade) invalid reward/risk (< 1.5), fewer than two code-counted 15m confirmations (price vs EMA20/EMA50, RSI side, most-recent swing break), stop farther than 2×ATR from entry, direct 4h/1h opposition, or a side that fights fully aligned multi-TF context. Still propose technically valid levels; code is the final gate.
@@ -49,6 +58,7 @@ JSON schema:
 export function buildUserPrompt(snapshot: MarketSnapshot): string {
   return [
     `Analyze this ${snapshot.symbol} snapshot using every checklist step. Evaluate long and short before no_trade.`,
+    "If side is no_trade, rationale must be exactly two lines: Failed: … then Watch: … with concrete snapshot levels.",
     "Snapshot JSON:",
     JSON.stringify(snapshot),
   ].join("\n");
