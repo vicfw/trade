@@ -1,5 +1,6 @@
 import { evaluatePositionOutcome } from "@trade/market"
 import { db } from "../db"
+import { analysisStore } from "./analysisStore"
 import { btcPositionTracker } from "./positionTracker"
 import { PerpCandleStore } from "./perpCandleStore"
 import { TradeStore } from "./tradeStore"
@@ -7,7 +8,20 @@ import { TradeStore } from "./tradeStore"
 export const perpCandleStore = new PerpCandleStore(db)
 export const tradeStore = new TradeStore(db)
 
+tradeStore.setMetaHandlers(
+  (key) => analysisStore.getOpenTradeMeta(key),
+  (key) => analysisStore.clearOpenTradeMeta(key),
+)
+
 const RECONCILE_EVERY_MS = 60_000
+
+type TradeClosedListener = (key: string) => void
+let tradeClosedListener: TradeClosedListener | null = null
+
+/** Called when a tracked position closes (successful/failed). */
+export function setOnTradeClosed(listener: TradeClosedListener | null): void {
+  tradeClosedListener = listener
+}
 
 /**
  * Sweep open tracked positions against the stored perp 1m candle record.
@@ -61,7 +75,12 @@ export function initPositionTracking(): void {
 
   btcPositionTracker.setOnUpdate((snapshot) => {
     tradeStore.upsertPosition(snapshot)
+    const closed =
+      snapshot.status === "successful" || snapshot.status === "failed"
     tradeStore.recordFromSnapshot(snapshot)
+    if (closed) {
+      tradeClosedListener?.(snapshot.key)
+    }
   })
 
   reconcileTrackedPositions()

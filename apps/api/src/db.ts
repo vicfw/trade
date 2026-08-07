@@ -72,6 +72,47 @@ function migratePerpCandles(db: Database): void {
   `)
 }
 
+function tableColumns(db: Database, table: string): Set<string> {
+  const rows = db.query(`PRAGMA table_info(${table})`).all() as { name: string }[]
+  return new Set(rows.map((row) => row.name))
+}
+
+function ensureColumn(
+  db: Database,
+  table: string,
+  column: string,
+  ddl: string,
+): void {
+  if (tableColumns(db, table).has(column)) return
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`)
+}
+
+function migrateTradeHistoryEnrichment(db: Database): void {
+  const exists = db
+    .query(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='trade_history'",
+    )
+    .get() as { name: string } | null
+  if (!exists) return
+
+  ensureColumn(db, "trade_history", "confidence", "confidence TEXT")
+  ensureColumn(db, "trade_history", "rationale", "rationale TEXT")
+  ensureColumn(db, "trade_history", "risk_reward", "risk_reward REAL")
+  ensureColumn(db, "trade_history", "leverage", "leverage REAL")
+  ensureColumn(db, "trade_history", "quantity_btc", "quantity_btc REAL")
+  ensureColumn(db, "trade_history", "risk_amount_usdt", "risk_amount_usdt REAL")
+  ensureColumn(
+    db,
+    "trade_history",
+    "account_balance_usdt",
+    "account_balance_usdt REAL",
+  )
+  ensureColumn(db, "trade_history", "max_risk_percent", "max_risk_percent REAL")
+  ensureColumn(db, "trade_history", "max_leverage", "max_leverage REAL")
+  ensureColumn(db, "trade_history", "bias_4h", "bias_4h TEXT")
+  ensureColumn(db, "trade_history", "structure_1h", "structure_1h TEXT")
+}
+
 export function createSchema(db: Database): void {
   migratePerpCandles(db)
 
@@ -103,9 +144,50 @@ export function createSchema(db: Database): void {
       hit_at INTEGER,
       hit_reason TEXT,
       price_source TEXT NOT NULL,
-      interval TEXT NOT NULL
+      interval TEXT NOT NULL,
+      confidence TEXT,
+      rationale TEXT,
+      risk_reward REAL,
+      leverage REAL,
+      quantity_btc REAL,
+      risk_amount_usdt REAL,
+      account_balance_usdt REAL,
+      max_risk_percent REAL,
+      max_leverage REAL,
+      bias_4h TEXT,
+      structure_1h TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS risk_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      account_balance_usdt REAL NOT NULL,
+      max_risk_percent REAL NOT NULL,
+      max_leverage REAL NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS latest_analysis (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      symbol TEXT NOT NULL,
+      generated_at INTEGER,
+      snapshot_at INTEGER,
+      suggestion_json TEXT,
+      market_json TEXT,
+      risk_used_json TEXT,
+      schedule_status TEXT NOT NULL,
+      next_analysis_at INTEGER,
+      last_error TEXT,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS open_trade_meta (
+      key TEXT PRIMARY KEY,
+      meta_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL
     );
   `)
+
+  migrateTradeHistoryEnrichment(db)
 }
 
 export function openDatabase(path = resolveDbPath()): Database {

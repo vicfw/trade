@@ -31,10 +31,15 @@ export type {
   PositionTestInterval,
   BtcPositionTestRequest,
   BtcPositionTestResponse,
+  AnalysisScheduleStatus,
+  AnalysisSchedule,
+  BtcAnalysisStatusResponse,
+  OpenTradeMeta,
   TradeHistoryEntry,
   BtcTradeHistoryResponse,
 } from "./position";
 export {
+  DEFAULT_RISK_RULES,
   formatNoTradeRationale,
   parseNoTradeRationale,
 } from "./position";

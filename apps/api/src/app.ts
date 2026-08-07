@@ -9,6 +9,7 @@ import { indicatorRoutes } from "./routes/indicators"
 import { suggestRoutes } from "./routes/suggest"
 import { testRoutes } from "./routes/test"
 import { historyRoutes } from "./routes/history"
+import { analysisRoutes } from "./routes/analysis"
 import { createWsRoutes } from "./routes/ws"
 
 const { upgradeWebSocket, websocket } = createBunWebSocket<ServerWebSocket>()
@@ -28,6 +29,7 @@ app.route("/", indicatorRoutes)
 app.route("/", suggestRoutes)
 app.route("/", testRoutes)
 app.route("/", historyRoutes)
+app.route("/", analysisRoutes)
 app.get("/ws/btc", createWsRoutes(upgradeWebSocket))
 
 app.get("/", (c) =>
@@ -39,6 +41,8 @@ app.get("/", (c) =>
     suggest: "/suggest/btc",
     test: "/test/btc",
     history: "/history/btc",
+    analysis: "/analysis/btc",
+    riskSettings: "/settings/risk",
   }),
 )
 

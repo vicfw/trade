@@ -7,11 +7,17 @@ import type {
 
 const { records, pending, error, refresh, clear } = useTradeHistory()
 
-function formatPrice(value: number) {
+function formatPrice(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) return "—"
   return new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 2,
     minimumFractionDigits: 0,
   }).format(value)
+}
+
+function formatNumber(value: number | null | undefined, digits = 2) {
+  if (value == null || Number.isNaN(value)) return "—"
+  return value.toFixed(digits)
 }
 
 function formatDateTime(ts: number | null) {
@@ -43,6 +49,17 @@ function sourceLabel(source: PositionTestPriceSource) {
   }
 }
 
+function riskLabel(row: TradeHistoryEntry) {
+  if (
+    row.accountBalanceUsdt == null ||
+    row.maxRiskPercent == null ||
+    row.maxLeverage == null
+  ) {
+    return "—"
+  }
+  return `$${formatNumber(row.accountBalanceUsdt, 2)} / ${formatNumber(row.maxRiskPercent, 2)}% / ${formatNumber(row.maxLeverage, 0)}x`
+}
+
 function onClear() {
   if (!records.value.length) return
   if (!window.confirm("Clear all trade history on the server?")) return
@@ -67,7 +84,7 @@ function onClear() {
       </div>
       <p class="history__lede">
         Closed outcomes only — take-profit (successful) or stop-loss (failed),
-        checked on BTCUSDT perpetual.
+        tracked automatically on BTCUSDT perpetual after each analysis.
       </p>
       <button
         type="button"
@@ -84,9 +101,8 @@ function onClear() {
       Loading…
     </p>
     <p v-else-if="!records.length" class="history__empty">
-      No closed trades yet. Analyze a position, then use Test — successes and
-      failures appear here once take-profit or stop-loss is hit on perpetual
-      price.
+      No closed trades yet. When automatic analysis suggests a long or short and
+      take-profit or stop-loss is hit, the outcome appears here.
     </p>
 
     <template v-else>
@@ -100,6 +116,13 @@ function onClear() {
               <th>Stop-loss</th>
               <th>Take-profit</th>
               <th>Hit</th>
+              <th>R:R</th>
+              <th>Leverage</th>
+              <th>Size</th>
+              <th>Risk $</th>
+              <th>Risk used</th>
+              <th>Confidence</th>
+              <th>4h / 1h</th>
               <th>Triggered</th>
               <th>Hit at</th>
               <th>Suggested at</th>
@@ -114,6 +137,27 @@ function onClear() {
               <td>{{ formatPrice(row.stopLoss) }}</td>
               <td>{{ formatPrice(row.takeProfit) }}</td>
               <td>{{ hitLabel(row.hitReason) }}</td>
+              <td>{{ formatNumber(row.riskReward, 2) }}</td>
+              <td>
+                {{
+                  row.leverage != null
+                    ? `${formatNumber(row.leverage, 2)}x`
+                    : "—"
+                }}
+              </td>
+              <td>
+                {{
+                  row.quantityBtc != null
+                    ? `${formatNumber(row.quantityBtc, 6)} BTC`
+                    : "—"
+                }}
+              </td>
+              <td>{{ formatPrice(row.riskAmountUsdt) }}</td>
+              <td>{{ riskLabel(row) }}</td>
+              <td>{{ row.confidence ?? "—" }}</td>
+              <td>
+                {{ row.bias4h ?? "—" }} / {{ row.structure1h ?? "—" }}
+              </td>
               <td>{{ formatDateTime(row.triggeredAt) }}</td>
               <td>{{ formatDateTime(row.hitAt) }}</td>
               <td>{{ formatDateTime(row.since) }}</td>
@@ -153,8 +197,52 @@ function onClear() {
               <dt>Hit</dt>
               <dd>{{ hitLabel(row.hitReason) }}</dd>
             </div>
+            <div>
+              <dt>R:R</dt>
+              <dd>{{ formatNumber(row.riskReward, 2) }}</dd>
+            </div>
+            <div>
+              <dt>Leverage</dt>
+              <dd>
+                {{
+                  row.leverage != null
+                    ? `${formatNumber(row.leverage, 2)}x`
+                    : "—"
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>Size</dt>
+              <dd>
+                {{
+                  row.quantityBtc != null
+                    ? `${formatNumber(row.quantityBtc, 6)} BTC`
+                    : "—"
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>Risk $</dt>
+              <dd>{{ formatPrice(row.riskAmountUsdt) }}</dd>
+            </div>
           </dl>
           <div class="history__card-meta">
+            <p>
+              <span class="history__card-label">Risk used</span>
+              {{ riskLabel(row) }}
+            </p>
+            <p>
+              <span class="history__card-label">Confidence</span>
+              {{ row.confidence ?? "—" }}
+            </p>
+            <p>
+              <span class="history__card-label">Context</span>
+              {{ row.bias4h ?? "—" }} / {{ row.structure1h ?? "—" }}
+            </p>
+            <p v-if="row.rationale">
+              <span class="history__card-label">Rationale</span>
+              {{ row.rationale }}
+            </p>
             <p>
               <span class="history__card-label">Triggered</span>
               {{ formatDateTime(row.triggeredAt) }}
@@ -302,7 +390,7 @@ body {
 .history__table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: #1a1f16;
 }
 
@@ -316,7 +404,7 @@ body {
 }
 
 .history__table th {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;

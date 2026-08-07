@@ -2,8 +2,13 @@ import { app, websocket } from "./app"
 import { config } from "./config"
 import { lbankTickerClient } from "./lbank/client"
 import { scheduleCandlesBroadcast } from "./market/candlesBroadcast"
+import { analysisScheduler } from "./market/analysisScheduler"
 import { btcPositionTracker } from "./market/positionTracker"
-import { initPositionTracking, perpCandleStore } from "./market/tracking"
+import {
+  initPositionTracking,
+  perpCandleStore,
+  setOnTradeClosed,
+} from "./market/tracking"
 
 let server: ReturnType<typeof Bun.serve>
 try {
@@ -22,6 +27,10 @@ try {
 }
 
 initPositionTracking()
+setOnTradeClosed(() => {
+  analysisScheduler.onTradeClosed()
+})
+analysisScheduler.start()
 
 lbankTickerClient.onTicker((ticker) => {
   btcPositionTracker.observeTicker(ticker)
@@ -45,4 +54,7 @@ console.log(
 )
 console.log(
   `[api] llm provider=${config.llm.provider} model=${config.llm.model} base=${config.llm.baseUrl}`,
+)
+console.log(
+  `[api] auto-analysis intervalMs=${config.analysisIntervalMs} retryMs=${config.analysisRetryMs}`,
 )

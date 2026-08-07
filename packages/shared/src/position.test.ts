@@ -1,8 +1,19 @@
 import { describe, expect, test } from "bun:test"
 import {
+  DEFAULT_RISK_RULES,
   formatNoTradeRationale,
   parseNoTradeRationale,
 } from "./position"
+
+describe("DEFAULT_RISK_RULES", () => {
+  test("uses $10 / 1% / 5x", () => {
+    expect(DEFAULT_RISK_RULES).toEqual({
+      accountBalanceUsdt: 10,
+      maxRiskPercent: 1,
+      maxLeverage: 5,
+    })
+  })
+})
 
 describe("no_trade rationale helpers", () => {
   test("round-trips Failed/Watch", () => {

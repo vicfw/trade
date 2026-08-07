@@ -6,75 +6,34 @@ const {
   intervals,
   activeInterval,
   activeCandles,
-  lastCandle,
   pending,
   error,
   setIntervalTab,
 } = useBtcCandles();
 
 const {
-  context,
-  activeIndicators,
-  pending: indicatorsPending,
-  error: indicatorsError,
-  refresh: refreshIndicators,
-} = useBtcIndicators(activeInterval);
-
-const {
   accountBalanceUsdt,
   maxRiskPercent,
   maxLeverage,
-  risk,
   isValid: riskValid,
+  syncError: riskSyncError,
 } = useRiskSettings();
 
 const {
   suggestion,
   market,
   generatedAt,
+  riskUsed,
+  schedule,
+  openPosition,
   pending: suggestionPending,
   error: suggestionError,
-  request: requestSuggestion,
-  clear: clearSuggestion,
 } = useBtcPositionSuggestion();
-
-const {
-  result: testResult,
-  pending: testPending,
-  error: testError,
-  request: requestTest,
-  clear: clearTest,
-} = useBtcPositionTest();
 
 const chartLevels = computed(() => {
   if (!suggestion.value || suggestion.value.side === "no_trade") return null;
   return suggestion.value.levels;
 });
-
-function analyze() {
-  if (!riskValid.value) return;
-  clearTest();
-  void requestSuggestion(risk.value);
-}
-
-function deleteSuggestion() {
-  clearSuggestion();
-  clearTest();
-}
-
-function testPosition() {
-  const current = suggestion.value;
-  if (!current || current.side === "no_trade" || !current.levels) return;
-  if (generatedAt.value == null) return;
-
-  void requestTest({
-    side: current.side,
-    entry: current.levels.entry,
-    stopLoss: current.levels.stopLoss,
-    takeProfit: current.levels.takeProfit,
-    since: generatedAt.value,
-  });
-}
 </script>
 
 <template>
@@ -109,23 +68,21 @@ function testPosition() {
       v-model:max-leverage="maxLeverage"
       :valid="riskValid"
     />
+    <p v-if="riskSyncError" class="page__risk-error" role="status">
+      {{ riskSyncError }}
+    </p>
 
     <BtcPositionSuggestion
       :suggestion="suggestion"
       :pending="suggestionPending"
       :error="suggestionError"
-      :risk-valid="riskValid"
       :generated-at="generatedAt"
       :market-price="market?.price ?? null"
       :bias4h="market?.bias4h ?? null"
       :structure1h="market?.structure1h ?? null"
-      :test-result="testResult"
-      :test-pending="testPending"
-      :test-error="testError"
-      @request="analyze"
-      @retry="analyze"
-      @test="testPosition"
-      @clear="deleteSuggestion"
+      :risk-used="riskUsed"
+      :schedule="schedule"
+      :open-position="openPosition"
     />
   </main>
 </template>
@@ -162,10 +119,9 @@ body {
 
 .page__nav-link {
   color: #4a5540;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
   text-decoration: none;
-  padding: 0.35rem 0;
 }
 
 .page__nav-link:hover {
@@ -173,14 +129,12 @@ body {
   text-decoration: underline;
 }
 
-@media (max-width: 640px) {
-  .page {
-    padding-top: 1rem;
-  }
-
-  .page__nav {
-    padding: 0 1rem;
-    margin-bottom: 0.5rem;
-  }
+.page__risk-error {
+  width: min(960px, 100%);
+  margin: -0.5rem auto 0.75rem;
+  padding: 0 1.5rem;
+  box-sizing: border-box;
+  color: #9b3a2f;
+  font-size: 0.85rem;
 }
 </style>

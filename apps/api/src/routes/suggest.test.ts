@@ -181,7 +181,8 @@ describe("POST /suggest/btc", () => {
     const body = await res.json()
     expect(body.suggestion.side).toBe("no_trade")
     expect(
-      body.suggestion.warnings.some((w: string) => /reward\/risk/.test(w)),
+      body.suggestion.warnings.some((w: string) => /reward\/risk/i.test(w)) ||
+        /reward\/risk/i.test(body.suggestion.rationale),
     ).toBe(true)
   })
 

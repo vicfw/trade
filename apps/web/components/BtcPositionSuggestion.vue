@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import {
   parseNoTradeRationale,
+  type AnalysisSchedule,
   type BtcPositionTestResponse,
   type PositionSuggestion,
+  type RiskRules,
   type SuggestionConfidence,
   type TradeSide,
 } from "@trade/shared"
@@ -11,22 +13,27 @@ const props = defineProps<{
   suggestion: PositionSuggestion | null
   pending: boolean
   error: string | null
-  riskValid: boolean
   generatedAt: number | null
   marketPrice: number | null
   bias4h: string | null
   structure1h: string | null
-  testResult: BtcPositionTestResponse | null
-  testPending: boolean
-  testError: string | null
+  riskUsed: RiskRules | null
+  schedule: AnalysisSchedule
+  openPosition: BtcPositionTestResponse | null
 }>()
 
-const emit = defineEmits<{
-  request: []
-  retry: []
-  test: []
-  clear: []
-}>()
+const nowTick = ref(Date.now())
+let countdownTimer: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  countdownTimer = setInterval(() => {
+    nowTick.value = Date.now()
+  }, 1_000)
+})
+
+onUnmounted(() => {
+  if (countdownTimer) clearInterval(countdownTimer)
+})
 
 function formatPrice(value: number | null | undefined) {
   if (value == null || Number.isNaN(value)) return "—"
@@ -43,21 +50,23 @@ function formatNumber(value: number | null | undefined, digits = 4) {
   return value.toFixed(digits)
 }
 
-function formatTime(ts: number | null) {
-  if (ts == null) return null
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(ts)
-}
-
 function formatDateTime(ts: number | null) {
   if (ts == null) return "—"
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "medium",
   }).format(ts)
+}
+
+function formatCountdown(ms: number) {
+  if (ms <= 0) return "soon"
+  const totalSec = Math.ceil(ms / 1000)
+  const hours = Math.floor(totalSec / 3600)
+  const minutes = Math.floor((totalSec % 3600) / 60)
+  const seconds = totalSec % 60
+  if (hours > 0) return `in ${hours}h ${minutes}m`
+  if (minutes > 0) return `in ${minutes}m ${seconds}s`
+  return `in ${seconds}s`
 }
 
 function testStatusLabel(status: BtcPositionTestResponse["status"]) {
@@ -108,54 +117,103 @@ const noTradeParts = computed(() => {
   if (!current || current.side !== "no_trade") return null
   return parseNoTradeRationale(current.rationale)
 })
+
+const isTrade = computed(() => {
+  const side = props.suggestion?.side
+  return side === "long" || side === "short"
+})
+
+const nextAnalysisRelative = computed(() => {
+  const at = props.schedule.nextAnalysisAt
+  if (at == null) return null
+  return formatCountdown(at - nowTick.value)
+})
+
+const scheduleSummary = computed(() => {
+  const status = props.schedule.status
+  if (status === "running" || props.pending) {
+    return "Analyzing market…"
+  }
+  if (status === "waiting_trade") {
+    return "Waiting for trade result (take-profit or stop-loss)."
+  }
+  if (status === "waiting_interval" || props.suggestion?.side === "no_trade") {
+    const relative = nextAnalysisRelative.value
+    const when = formatDateTime(props.schedule.nextAnalysisAt)
+    return relative
+      ? `Next analysis ${relative} (${when}).`
+      : `Next analysis at ${when}.`
+  }
+  if (status === "error") {
+    const relative = nextAnalysisRelative.value
+    return relative
+      ? `Analysis error — retry ${relative}.`
+      : "Analysis error — retrying soon."
+  }
+  if (!hasSuggestion.value) {
+    return "Waiting for the first automatic market analysis."
+  }
+  return "Idle."
+})
 </script>
 
 <template>
   <section class="suggest" :aria-busy="pending">
     <header class="suggest__header">
-      <div class="suggest__actions">
-        <button
-          type="button"
-          class="suggest__cta"
-          :disabled="pending || !riskValid"
-          @click="emit('request')"
-        >
-          {{ pending ? "Analyzing…" : "Analyze market" }}
-        </button>
-        <button
-          v-if="hasSuggestion"
-          type="button"
-          class="suggest__delete"
-          :disabled="pending"
-          @click="emit('clear')"
-        >
-          Delete
-        </button>
+      <div>
+        <h2 class="suggest__title">Market analysis</h2>
+        <p class="suggest__subtitle">Runs automatically on the server</p>
       </div>
     </header>
 
+    <div class="suggest__schedule" role="status">
+      <p class="suggest__schedule-line">
+        <span class="suggest__schedule-label">Status</span>
+        {{ scheduleSummary }}
+      </p>
+      <p v-if="generatedAt" class="suggest__schedule-line">
+        <span class="suggest__schedule-label">Analyzed at</span>
+        {{ formatDateTime(generatedAt) }}
+      </p>
+      <p
+        v-if="
+          schedule.nextAnalysisAt != null &&
+          (schedule.status === 'waiting_interval' ||
+            schedule.status === 'error' ||
+            suggestion?.side === 'no_trade')
+        "
+        class="suggest__schedule-line"
+      >
+        <span class="suggest__schedule-label">Next analysis</span>
+        {{ formatDateTime(schedule.nextAnalysisAt) }}
+        <span v-if="nextAnalysisRelative" class="suggest__schedule-relative">
+          ({{ nextAnalysisRelative }})
+        </span>
+      </p>
+      <p v-if="riskUsed" class="suggest__schedule-line">
+        <span class="suggest__schedule-label">Risk used</span>
+        ${{ formatNumber(riskUsed.accountBalanceUsdt, 2) }} balance ·
+        {{ formatNumber(riskUsed.maxRiskPercent, 2) }}% risk ·
+        {{ formatNumber(riskUsed.maxLeverage, 0) }}x max leverage
+      </p>
+    </div>
+
     <p v-if="error" class="suggest__state suggest__state--error" role="status">
       {{ error }}
-      <button type="button" class="suggest__retry" @click="emit('retry')">
-        Retry
-      </button>
     </p>
     <p
       v-else-if="pending && !hasSuggestion"
       class="suggest__state"
       role="status"
     >
-      Analyzing market… this may take 10–30s
+      Analyzing market… this may take a few minutes
     </p>
     <p v-else-if="!hasSuggestion" class="suggest__state" role="status">
-      Set risk limits, then analyze for a structured position suggestion.
+      No analysis yet. The server will run one automatically.
     </p>
     <template v-else-if="suggestion">
       <div class="suggest__meta">
-        <div
-          class="suggest__badge"
-          :data-side="suggestion.side"
-        >
+        <div class="suggest__badge" :data-side="suggestion.side">
           <span class="suggest__badge-label">Side</span>
           <span class="suggest__badge-value">{{
             sideLabel(suggestion.side)
@@ -169,11 +227,15 @@ const noTradeParts = computed(() => {
         </div>
         <div v-if="generatedAt" class="suggest__badge">
           <span class="suggest__badge-label">Suggested</span>
-          <span class="suggest__badge-value">{{ formatTime(generatedAt) }}</span>
+          <span class="suggest__badge-value">{{
+            formatDateTime(generatedAt)
+          }}</span>
         </div>
         <div v-if="marketPrice != null" class="suggest__badge">
           <span class="suggest__badge-label">Perp</span>
-          <span class="suggest__badge-value">{{ formatPrice(marketPrice) }}</span>
+          <span class="suggest__badge-value">{{
+            formatPrice(marketPrice)
+          }}</span>
         </div>
         <div v-if="bias4h" class="suggest__badge">
           <span class="suggest__badge-label">4h bias</span>
@@ -212,16 +274,34 @@ const noTradeParts = computed(() => {
           </dd>
         </div>
         <div>
-          <dt>Risk $</dt>
-          <dd>{{ formatPrice(suggestion.sizing?.riskAmountUsdt) }}</dd>
+          <dt>Size</dt>
+          <dd>
+            {{
+              suggestion.sizing
+                ? `${formatNumber(suggestion.sizing.quantityBtc, 6)} BTC`
+                : "—"
+            }}
+          </dd>
         </div>
         <div>
-          <dt>Size (BTC)</dt>
-          <dd>{{ formatNumber(suggestion.sizing?.quantityBtc, 6) }}</dd>
+          <dt>Risk</dt>
+          <dd>
+            {{
+              suggestion.sizing
+                ? formatPrice(suggestion.sizing.riskAmountUsdt)
+                : "—"
+            }}
+          </dd>
         </div>
         <div>
           <dt>Notional</dt>
-          <dd>{{ formatPrice(suggestion.sizing?.notionalUsdt) }}</dd>
+          <dd>
+            {{
+              suggestion.sizing
+                ? formatPrice(suggestion.sizing.notionalUsdt)
+                : "—"
+            }}
+          </dd>
         </div>
         <div>
           <dt>Leverage</dt>
@@ -240,73 +320,62 @@ const noTradeParts = computed(() => {
         </div>
       </dl>
 
-      <div v-if="suggestion.side !== 'no_trade'" class="suggest__test">
-        <button
-          type="button"
-          class="suggest__test-cta"
-          :disabled="testPending"
-          @click="emit('test')"
-        >
-          {{ testPending ? "Checking…" : "Test" }}
-        </button>
-
-        <p v-if="testError" class="suggest__test-state suggest__test-state--error">
-          {{ testError }}
-        </p>
+      <div v-if="isTrade" class="suggest__outcome">
         <div
-          v-else-if="testResult"
+          v-if="openPosition"
           class="suggest__test-state"
-          :data-status="testResult.status"
+          :data-status="openPosition.status"
         >
           <p class="suggest__test-summary">
             <span class="suggest__test-status">{{
-              testStatusLabel(testResult.status)
+              testStatusLabel(openPosition.status)
             }}</span>
-            <span v-if="testResult.status === 'not_triggered'">
-              Entry never touched on BTCUSDT perpetual since
-              {{ formatDateTime(testResult.since) }}.
+            <span v-if="openPosition.status === 'not_triggered'">
+              Waiting for entry on BTCUSDT perpetual since
+              {{ formatDateTime(openPosition.since) }}.
             </span>
-            <span v-else-if="testResult.status === 'waiting'">
+            <span v-else-if="openPosition.status === 'waiting'">
               Entry filled
-              <template v-if="testResult.triggeredAt">
-                at {{ formatDateTime(testResult.triggeredAt) }}
+              <template v-if="openPosition.triggeredAt">
+                at {{ formatDateTime(openPosition.triggeredAt) }}
               </template>
               — still open; neither stop-loss nor take-profit hit yet.
             </span>
-            <span v-else-if="testResult.status === 'successful'">
-              Take-profit hit at {{ formatDateTime(testResult.hitAt) }}
-              <template v-if="testResult.triggeredAt">
-                (entered {{ formatDateTime(testResult.triggeredAt) }})
+            <span v-else-if="openPosition.status === 'successful'">
+              Take-profit hit at {{ formatDateTime(openPosition.hitAt) }}
+              <template v-if="openPosition.triggeredAt">
+                (entered {{ formatDateTime(openPosition.triggeredAt) }})
               </template>
               .
             </span>
             <span v-else>
-              Stop-loss hit at {{ formatDateTime(testResult.hitAt) }}
-              <template v-if="testResult.triggeredAt">
-                (entered {{ formatDateTime(testResult.triggeredAt) }})
+              Stop-loss hit at {{ formatDateTime(openPosition.hitAt) }}
+              <template v-if="openPosition.triggeredAt">
+                (entered {{ formatDateTime(openPosition.triggeredAt) }})
               </template>
               .
             </span>
           </p>
           <p class="suggest__test-source">
-            <span v-if="testResult.currentPrice != null">
-              Current perp {{ formatPrice(testResult.currentPrice) }}
+            <span v-if="openPosition.currentPrice != null">
+              Current perp {{ formatPrice(openPosition.currentPrice) }}
             </span>
-            <span>{{ testSourceLabel(testResult.priceSource) }}</span>
+            <span>{{ testSourceLabel(openPosition.priceSource) }}</span>
             <NuxtLink to="/history" class="suggest__test-history">
               Trade history
             </NuxtLink>
           </p>
-          <ul v-if="testResult.warnings.length" class="suggest__test-warnings">
-            <li v-for="(warning, i) in testResult.warnings" :key="i">
+          <ul
+            v-if="openPosition.warnings.length"
+            class="suggest__test-warnings"
+          >
+            <li v-for="(warning, i) in openPosition.warnings" :key="i">
               {{ warning }}
             </li>
           </ul>
         </div>
         <p v-else class="suggest__test-state suggest__test-state--muted">
-          Check on BTCUSDT perpetual whether this suggestion (made
-          {{ formatDateTime(generatedAt) }}) triggered, then hit take-profit or
-          stop-loss.
+          Tracking this position on BTCUSDT perpetual. Status updates every 5s.
           <NuxtLink to="/history" class="suggest__test-history">
             Trade history
           </NuxtLink>
@@ -336,6 +405,12 @@ const noTradeParts = computed(() => {
         </li>
       </ul>
     </template>
+
+    <p class="suggest__disclaimer">
+      Research assistant only — not financial advice. Outcomes are simulated
+      against perpetual price; size and leverage are code-enforced from your risk
+      settings.
+    </p>
   </section>
 </template>
 
@@ -352,16 +427,9 @@ const noTradeParts = computed(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 1rem;
   margin-bottom: 0.75rem;
-}
-
-.suggest__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.65rem;
 }
 
 .suggest__title {
@@ -379,40 +447,36 @@ const noTradeParts = computed(() => {
   color: #7a8470;
 }
 
-.suggest__cta {
-  appearance: none;
-  border: 1px solid #2f6b3a;
-  background: #2f6b3a;
-  color: #f5f8f2;
-  font: inherit;
+.suggest__schedule {
+  margin: 0 0 1rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid rgba(26, 31, 22, 0.08);
+  border-bottom: 1px solid rgba(26, 31, 22, 0.08);
+  display: grid;
+  gap: 0.4rem;
+}
+
+.suggest__schedule-line {
+  margin: 0;
   font-size: 0.9rem;
-  font-weight: 600;
-  padding: 0.55rem 1rem;
-  cursor: pointer;
-  min-height: 2.75rem;
+  color: #1a1f16;
+  line-height: 1.45;
 }
 
-.suggest__cta:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+.suggest__schedule-label {
+  display: inline-block;
+  min-width: 7rem;
+  margin-right: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #7a8470;
 }
 
-.suggest__delete {
-  appearance: none;
-  border: 1px solid #9b3a2f;
-  background: transparent;
-  color: #9b3a2f;
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 600;
-  padding: 0.55rem 1rem;
-  cursor: pointer;
-  min-height: 2.75rem;
-}
-
-.suggest__delete:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+.suggest__schedule-relative {
+  color: #7a8470;
+  font-size: 0.85rem;
 }
 
 .suggest__meta {
@@ -420,8 +484,7 @@ const noTradeParts = computed(() => {
   flex-wrap: wrap;
   gap: 0.75rem 1.25rem;
   margin-bottom: 1rem;
-  border-top: 1px solid rgba(26, 31, 22, 0.08);
-  padding-top: 1rem;
+  padding-top: 0.25rem;
 }
 
 .suggest__badge {
@@ -492,38 +555,14 @@ const noTradeParts = computed(() => {
   color: #9b3a2f;
 }
 
-.suggest__test {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.85rem;
+.suggest__outcome {
   margin: 0 0 1.25rem;
   padding-top: 0.9rem;
   border-top: 1px solid rgba(26, 31, 22, 0.08);
 }
 
-.suggest__test-cta {
-  appearance: none;
-  border: 1px solid #1a1f16;
-  background: transparent;
-  color: #1a1f16;
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
-  padding: 0.45rem 0.9rem;
-  cursor: pointer;
-  min-height: 2.5rem;
-}
-
-.suggest__test-cta:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 .suggest__test-state {
   margin: 0;
-  flex: 1 1 12rem;
-  min-width: 0;
   font-size: 0.9rem;
   color: #1a1f16;
 }
@@ -562,10 +601,6 @@ const noTradeParts = computed(() => {
 
 .suggest__test-state--muted {
   color: #7a8470;
-}
-
-.suggest__test-state--error {
-  color: #9b3a2f;
 }
 
 .suggest__test-status {
@@ -656,18 +691,6 @@ const noTradeParts = computed(() => {
   gap: 0.75rem;
 }
 
-.suggest__retry {
-  appearance: none;
-  border: 1px solid #9b3a2f;
-  background: transparent;
-  color: #9b3a2f;
-  font: inherit;
-  font-size: 0.85rem;
-  padding: 0.45rem 0.85rem;
-  cursor: pointer;
-  min-height: 2.5rem;
-}
-
 @media (max-width: 720px) {
   .suggest__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -679,20 +702,6 @@ const noTradeParts = computed(() => {
     padding: 0 1rem 2rem;
   }
 
-  .suggest__header {
-    justify-content: stretch;
-  }
-
-  .suggest__actions {
-    width: 100%;
-  }
-
-  .suggest__cta,
-  .suggest__delete {
-    flex: 1 1 auto;
-    text-align: center;
-  }
-
   .suggest__meta {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -701,15 +710,6 @@ const noTradeParts = computed(() => {
 
   .suggest__badge {
     min-width: 0;
-  }
-
-  .suggest__test {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .suggest__test-cta {
-    width: 100%;
   }
 
   .suggest__state {
