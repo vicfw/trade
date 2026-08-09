@@ -57,6 +57,7 @@ function normalizeScheduleStatus(value: string): AnalysisScheduleStatus {
     case "idle":
     case "running":
     case "waiting_interval":
+    case "waiting_window":
     case "waiting_trade":
     case "error":
       return value

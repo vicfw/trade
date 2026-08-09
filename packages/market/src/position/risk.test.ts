@@ -374,6 +374,38 @@ describe("finalizeSuggestion", () => {
     expect(result.rationale).toMatch(/\nWatch:/)
   })
 
+  test("rejects stop tighter than 0.75x ATR after snap", () => {
+    const result = finalizeSuggestion(
+      {
+        side: "long",
+        entry: 100_000,
+        stopLoss: 99_900,
+        takeProfit: 101_500,
+        confidence: "high",
+        rationale: "Noise stop",
+      },
+      rules,
+      {
+        bias4h: "bull",
+        structure1h: "uptrend",
+        entryIndicators: {
+          ema20: 99_000,
+          ema50: 98_000,
+          ema200: 97_000,
+          rsi14: 55,
+          atr14: 400,
+          lastClose: 100_000,
+          openTime: 1,
+          // No swing low below entry → keep LLM stop; distance 100 < 0.75*400
+          swings: [{ kind: "high", index: 2, openTime: 2, price: 101_500 }],
+        },
+      },
+    )
+    expect(result.side).toBe("no_trade")
+    expect(result.rationale).toMatch(/^Failed:.*0\.75×ATR/i)
+    expect(result.rationale).toMatch(/\nWatch:/)
+  })
+
   test("snaps levels then sizes", () => {
     const result = finalizeSuggestion(
       {

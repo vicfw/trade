@@ -1,11 +1,15 @@
 process.env.NODE_ENV = "test"
-process.env.ANALYSIS_INTERVAL_MS = "7200000"
+process.env.ANALYSIS_INTERVAL_MS = "2700000"
 process.env.ANALYSIS_RETRY_MS = "300000"
+process.env.ANALYSIS_TZ = "Asia/Tehran"
+process.env.ANALYSIS_WINDOW_START = "17:00"
+process.env.ANALYSIS_WINDOW_END = "01:00"
 
 import { beforeEach, describe, expect, mock, test } from "bun:test"
 import { Database } from "bun:sqlite"
 import type { BtcSuggestResponse } from "@trade/shared"
 import { createSchema } from "../db"
+import { zonedTimeToUtc } from "./analysisWindow"
 
 const runSuggestMock = mock(async (): Promise<BtcSuggestResponse> => {
   throw new Error("runSuggest not stubbed")
@@ -64,6 +68,12 @@ mock.module("./positionTracker", () => ({
 
 const { AnalysisScheduler } = await import("./analysisScheduler")
 
+/** 20:00 Asia/Tehran on 2024-06-10 — inside the analysis window. */
+const IN_WINDOW = zonedTimeToUtc(2024, 6, 10, 20, 0, "Asia/Tehran")
+/** 12:00 Asia/Tehran on 2024-06-10 — outside the analysis window. */
+const OUT_WINDOW = zonedTimeToUtc(2024, 6, 10, 12, 0, "Asia/Tehran")
+const NEXT_OPEN = zonedTimeToUtc(2024, 6, 10, 17, 0, "Asia/Tehran")
+
 function noTradeResponse(generatedAt: number): BtcSuggestResponse {
   return {
     symbol: "BTCUSDT",
@@ -119,8 +129,8 @@ describe("AnalysisScheduler", () => {
     })
   })
 
-  test("no_trade schedules next analysis +2h", async () => {
-    const now = 1_700_000_000_000
+  test("no_trade schedules next analysis +45m", async () => {
+    const now = IN_WINDOW
     runSuggestMock.mockImplementation(async () => {
       const response = noTradeResponse(now)
       analysisStore.saveAnalysis({
@@ -135,7 +145,7 @@ describe("AnalysisScheduler", () => {
           maxLeverage: 5,
         },
         scheduleStatus: "waiting_interval",
-        nextAnalysisAt: now + 7_200_000,
+        nextAnalysisAt: now + 2_700_000,
         lastError: null,
       })
       return response
@@ -148,12 +158,12 @@ describe("AnalysisScheduler", () => {
     const latest = analysisStore.getLatestAnalysis()
     expect(runSuggestMock).toHaveBeenCalled()
     expect(latest.schedule.status).toBe("waiting_interval")
-    expect(latest.schedule.nextAnalysisAt).toBe(now + 7_200_000)
+    expect(latest.schedule.nextAnalysisAt).toBe(now + 2_700_000)
   })
 
   test("open trade blocks bootstrap analysis", async () => {
     hasOpenTrackedTradeMock.mockReturnValue(true)
-    const scheduler = new AnalysisScheduler(() => 1_700_000_000_000)
+    const scheduler = new AnalysisScheduler(() => IN_WINDOW)
     scheduler.start()
     await Bun.sleep(30)
     expect(runSuggestMock).not.toHaveBeenCalled()
@@ -162,8 +172,8 @@ describe("AnalysisScheduler", () => {
     )
   })
 
-  test("trade close queues a new analysis", async () => {
-    const now = 1_700_000_000_000
+  test("trade close inside window queues a new analysis", async () => {
+    const now = IN_WINDOW
     let clock = now
     runSuggestMock.mockImplementation(async () => {
       const response = longResponse(clock)
@@ -202,5 +212,33 @@ describe("AnalysisScheduler", () => {
     expect(analysisStore.getLatestAnalysis().schedule.status).toBe(
       "waiting_trade",
     )
+  })
+
+  test("bootstrap outside window defers to next 17:00", async () => {
+    const scheduler = new AnalysisScheduler(() => OUT_WINDOW)
+    scheduler.start()
+    await Bun.sleep(30)
+
+    expect(runSuggestMock).not.toHaveBeenCalled()
+    const latest = analysisStore.getLatestAnalysis()
+    expect(latest.schedule.status).toBe("waiting_window")
+    expect(latest.schedule.nextAnalysisAt).toBe(NEXT_OPEN)
+  })
+
+  test("trade close outside window defers to next 17:00", async () => {
+    hasOpenTrackedTradeMock.mockReturnValue(true)
+    const scheduler = new AnalysisScheduler(() => OUT_WINDOW)
+    scheduler.start()
+    await Bun.sleep(30)
+    expect(runSuggestMock).not.toHaveBeenCalled()
+
+    hasOpenTrackedTradeMock.mockReturnValue(false)
+    scheduler.onTradeClosed()
+    await Bun.sleep(30)
+
+    expect(runSuggestMock).not.toHaveBeenCalled()
+    const latest = analysisStore.getLatestAnalysis()
+    expect(latest.schedule.status).toBe("waiting_window")
+    expect(latest.schedule.nextAnalysisAt).toBe(NEXT_OPEN)
   })
 })

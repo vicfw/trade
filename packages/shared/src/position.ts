@@ -142,6 +142,7 @@ export type AnalysisScheduleStatus =
   | "idle"
   | "running"
   | "waiting_interval"
+  | "waiting_window"
   | "waiting_trade"
   | "error"
 

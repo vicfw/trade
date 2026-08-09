@@ -48,6 +48,34 @@ function parseIntervals(raw: string | undefined): KlineInterval[] {
   return intervals;
 }
 
+/** Parse `HH:mm` wall-clock times for the analysis window. */
+function parseHm(
+  raw: string,
+  envName = "time",
+): { hour: number; minute: number } {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(raw.trim());
+  if (!match) {
+    throw new Error(
+      `Invalid ${envName} "${raw}". Expected HH:mm (e.g. 17:00).`,
+    );
+  }
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    throw new Error(
+      `Invalid ${envName} "${raw}". Hour must be 0–23 and minute 0–59.`,
+    );
+  }
+  return { hour, minute };
+}
+
 function parsePerpKlinePeriods(raw: string | undefined): string[] {
   if (!raw?.trim()) {
     return [...DEFAULT_PERP_KLINE_PERIODS];
@@ -135,8 +163,8 @@ export const config = {
   llmTimeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 180_000),
   llmCandleWindow: Number(process.env.LLM_CANDLE_WINDOW ?? 60),
   suggestCooldownMs: Number(process.env.SUGGEST_COOLDOWN_MS ?? 15_000),
-  /** Auto re-analysis delay after no_trade (default 2h). */
-  analysisIntervalMs: Number(process.env.ANALYSIS_INTERVAL_MS ?? 7_200_000),
+  /** Auto re-analysis delay after no_trade (default 45m). */
+  analysisIntervalMs: Number(process.env.ANALYSIS_INTERVAL_MS ?? 2_700_000),
   /**
    * Cancel unfilled limit entries after this long (default 2h).
    * Filled positions (waiting for SL/TP) are not affected.
@@ -144,4 +172,16 @@ export const config = {
   entryTimeoutMs: Number(process.env.ENTRY_TIMEOUT_MS ?? 7_200_000),
   /** Retry delay after a failed auto-analysis run. */
   analysisRetryMs: Number(process.env.ANALYSIS_RETRY_MS ?? 300_000),
+  /** IANA timezone for the auto-analysis daily window. */
+  analysisTz: process.env.ANALYSIS_TZ ?? "Asia/Tehran",
+  /** Local wall-clock start of the auto-analysis window (HH:mm, inclusive). */
+  analysisWindowStart: parseHm(
+    process.env.ANALYSIS_WINDOW_START ?? "17:00",
+    "ANALYSIS_WINDOW_START",
+  ),
+  /** Local wall-clock end of the auto-analysis window (HH:mm, exclusive). */
+  analysisWindowEnd: parseHm(
+    process.env.ANALYSIS_WINDOW_END ?? "01:00",
+    "ANALYSIS_WINDOW_END",
+  ),
 } as const;

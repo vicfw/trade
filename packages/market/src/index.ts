@@ -29,11 +29,13 @@ export {
   snapTradeLevels,
   isTakeProfitAlreadyThrough,
   countEntrySignals,
+  isStopTooTight,
   isStopTooWide,
   MIN_RISK_REWARD,
   ATR_STOP_BUFFER,
   MIN_ENTRY_SIGNALS,
   MAX_STOP_ATR_MULT,
+  MIN_STOP_ATR_MULT,
 } from "./position/policy";
 export type { EntrySignalCount, EntrySignalFlags } from "./position/policy";
 export { evaluatePositionOutcome } from "./position/outcome";

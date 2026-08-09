@@ -12,11 +12,13 @@ import {
 import {
   countEntrySignals,
   isMultiTfOpposed,
+  isStopTooTight,
   isStopTooWide,
   isTakeProfitAlreadyThrough,
   MAX_STOP_ATR_MULT,
   MIN_ENTRY_SIGNALS,
   MIN_RISK_REWARD,
+  MIN_STOP_ATR_MULT,
   sideConflictsWithAlignedContext,
   snapTradeLevels,
 } from "./policy"
@@ -156,6 +158,44 @@ function formatFinalLevelsNote(
   return `Final levels after policy: entry ${levels.entry}, stop-loss ${levels.stopLoss}, take-profit ${levels.takeProfit} (R:R ${riskReward.toFixed(2)}).`
 }
 
+/** Reject stop distance outside [MIN_STOP_ATR_MULT, MAX_STOP_ATR_MULT] × ATR. */
+function downgradeStopAtrWidth(
+  proposal: LlmPositionProposal,
+  entry: number,
+  stopLoss: number,
+  atr14: number | null | undefined,
+  kind: "wide" | "tight",
+  warnings: string[],
+): PositionSuggestion {
+  const atr = atr14
+  const distance = Math.abs(entry - stopLoss)
+  const atrOk = atr != null && atr > 0
+  if (kind === "wide") {
+    const detail = atrOk
+      ? `stop distance ${distance.toFixed(2)} exceeds ${MAX_STOP_ATR_MULT}×ATR (${(MAX_STOP_ATR_MULT * atr).toFixed(2)})`
+      : "15m ATR unavailable; cannot verify stop width"
+    return downgradeNoTrade(
+      proposal,
+      `${detail.charAt(0).toUpperCase()}${detail.slice(1)}.`,
+      atrOk
+        ? `Re-check when stop distance is ≤ ${(MAX_STOP_ATR_MULT * atr).toFixed(2)} (${MAX_STOP_ATR_MULT}×15m ATR), e.g. a closer invalidation swing.`
+        : `Re-check once 15m ATR is available and stop distance stays within ${MAX_STOP_ATR_MULT}×ATR of entry.`,
+      warnings,
+    )
+  }
+  const detail = atrOk
+    ? `stop distance ${distance.toFixed(2)} is below ${MIN_STOP_ATR_MULT}×ATR (${(MIN_STOP_ATR_MULT * atr).toFixed(2)})`
+    : "15m ATR unavailable; cannot verify stop width"
+  return downgradeNoTrade(
+    proposal,
+    `${detail.charAt(0).toUpperCase()}${detail.slice(1)}.`,
+    atrOk
+      ? `Re-check when stop distance is ≥ ${(MIN_STOP_ATR_MULT * atr).toFixed(2)} (${MIN_STOP_ATR_MULT}×15m ATR), e.g. a deeper invalidation swing beyond noise.`
+      : `Re-check once 15m ATR is available and stop distance stays at least ${MIN_STOP_ATR_MULT}×ATR from entry.`,
+    warnings,
+  )
+}
+
 /**
  * Turn a validated LLM proposal into a final suggestion with code-enforced
  * level snap, RR / multi-TF policy, and sizing.
@@ -262,18 +302,25 @@ export function finalizeSuggestion(
   if (
     isStopTooWide(levels.entry, levels.stopLoss, ctx.entryIndicators.atr14)
   ) {
-    const atr = ctx.entryIndicators.atr14
-    const distance = Math.abs(levels.entry - levels.stopLoss)
-    const detail =
-      atr != null && atr > 0
-        ? `stop distance ${distance.toFixed(2)} exceeds ${MAX_STOP_ATR_MULT}×ATR (${(MAX_STOP_ATR_MULT * atr).toFixed(2)})`
-        : "15m ATR unavailable; cannot verify stop width"
-    return downgradeNoTrade(
+    return downgradeStopAtrWidth(
       proposal,
-      `${detail.charAt(0).toUpperCase()}${detail.slice(1)}.`,
-      atr != null && atr > 0
-        ? `Re-check when stop distance is ≤ ${(MAX_STOP_ATR_MULT * atr).toFixed(2)} (2×15m ATR), e.g. a closer invalidation swing.`
-        : "Re-check once 15m ATR is available and stop distance stays within 2×ATR of entry.",
+      levels.entry,
+      levels.stopLoss,
+      ctx.entryIndicators.atr14,
+      "wide",
+      warnings,
+    )
+  }
+
+  if (
+    isStopTooTight(levels.entry, levels.stopLoss, ctx.entryIndicators.atr14)
+  ) {
+    return downgradeStopAtrWidth(
+      proposal,
+      levels.entry,
+      levels.stopLoss,
+      ctx.entryIndicators.atr14,
+      "tight",
       warnings,
     )
   }

@@ -139,18 +139,25 @@ const scheduleSummary = computed(() => {
   if (status === "waiting_trade") {
     return "Waiting for entry fill or trade result (take-profit / stop-loss)."
   }
-  if (status === "waiting_interval" || props.suggestion?.side === "no_trade") {
+  if (status === "waiting_window") {
     const relative = nextAnalysisRelative.value
     const when = formatDateTime(props.schedule.nextAnalysisAt)
     return relative
-      ? `Next analysis ${relative} (${when}).`
-      : `Next analysis at ${when}.`
+      ? `Next analysis when the session opens ${relative} (${when}).`
+      : `Next analysis when the session opens (${when}).`
   }
   if (status === "error") {
     const relative = nextAnalysisRelative.value
     return relative
       ? `Analysis error — retry ${relative}.`
       : "Analysis error — retrying soon."
+  }
+  if (status === "waiting_interval" || props.suggestion?.side === "no_trade") {
+    const relative = nextAnalysisRelative.value
+    const when = formatDateTime(props.schedule.nextAnalysisAt)
+    return relative
+      ? `Next analysis ${relative} (${when}).`
+      : `Next analysis at ${when}.`
   }
   if (!hasSuggestion.value) {
     return "Waiting for the first automatic market analysis."
@@ -181,6 +188,7 @@ const scheduleSummary = computed(() => {
         v-if="
           schedule.nextAnalysisAt != null &&
           (schedule.status === 'waiting_interval' ||
+            schedule.status === 'waiting_window' ||
             schedule.status === 'error' ||
             suggestion?.side === 'no_trade')
         "

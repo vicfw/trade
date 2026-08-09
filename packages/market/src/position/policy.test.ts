@@ -3,9 +3,11 @@ import type { IntervalIndicators, PositionLevels } from "@trade/shared"
 import {
   countEntrySignals,
   isMultiTfOpposed,
+  isStopTooTight,
   isStopTooWide,
   isTakeProfitAlreadyThrough,
   MAX_STOP_ATR_MULT,
+  MIN_STOP_ATR_MULT,
   sideConflictsWithAlignedContext,
   snapTradeLevels,
 } from "./policy"
@@ -142,6 +144,23 @@ describe("isStopTooWide", () => {
   test("true when ATR missing or invalid", () => {
     expect(isStopTooWide(100_000, 99_500, null)).toBe(true)
     expect(isStopTooWide(100_000, 99_500, 0)).toBe(true)
+  })
+})
+
+describe("isStopTooTight", () => {
+  test("false when stop at or beyond 0.75x ATR", () => {
+    expect(isStopTooTight(100_000, 99_775, 300)).toBe(false) // exactly 0.75x
+    expect(isStopTooTight(100_000, 99_500, 300)).toBe(false)
+    expect(MIN_STOP_ATR_MULT).toBe(0.75)
+  })
+
+  test("true when stop closer than 0.75x ATR", () => {
+    expect(isStopTooTight(100_000, 99_800, 300)).toBe(true) // 200 < 225
+  })
+
+  test("true when ATR missing or invalid", () => {
+    expect(isStopTooTight(100_000, 99_500, null)).toBe(true)
+    expect(isStopTooTight(100_000, 99_500, 0)).toBe(true)
   })
 })
 

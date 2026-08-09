@@ -13,6 +13,8 @@ export const ATR_STOP_BUFFER = 0.25
 export const MIN_ENTRY_SIGNALS = 2
 /** Reject stops farther than this many ATR14 from entry (after snap). */
 export const MAX_STOP_ATR_MULT = 2
+/** Reject stops closer than this many ATR14 from entry (after snap) — noise floor. */
+export const MIN_STOP_ATR_MULT = 0.75
 
 export interface EntrySignalFlags {
   priceVsEma20: boolean
@@ -88,6 +90,20 @@ export function countEntrySignals(
 }
 
 /**
+ * Finite stop distance and ATR, or null when either cannot be verified.
+ */
+function measuredStopDistance(
+  entry: number,
+  stopLoss: number,
+  atr14: number | null,
+): { distance: number; atr: number } | null {
+  if (!isFiniteNumber(atr14) || !(atr14 > 0)) return null
+  const distance = Math.abs(entry - stopLoss)
+  if (!(distance > 0) || !Number.isFinite(distance)) return null
+  return { distance, atr: atr14 }
+}
+
+/**
  * True when stop is farther than `mult × atr` from entry.
  * Also true when ATR is missing/invalid (cannot verify risk width).
  */
@@ -97,10 +113,24 @@ export function isStopTooWide(
   atr14: number | null,
   mult = MAX_STOP_ATR_MULT,
 ): boolean {
-  if (!isFiniteNumber(atr14) || !(atr14 > 0)) return true
-  const distance = Math.abs(entry - stopLoss)
-  if (!(distance > 0) || !Number.isFinite(distance)) return true
-  return distance > mult * atr14
+  const measured = measuredStopDistance(entry, stopLoss, atr14)
+  if (measured == null) return true
+  return measured.distance > mult * measured.atr
+}
+
+/**
+ * True when stop is closer than `mult × atr` from entry (noise stop).
+ * Also true when ATR is missing/invalid (cannot verify risk width).
+ */
+export function isStopTooTight(
+  entry: number,
+  stopLoss: number,
+  atr14: number | null,
+  mult = MIN_STOP_ATR_MULT,
+): boolean {
+  const measured = measuredStopDistance(entry, stopLoss, atr14)
+  if (measured == null) return true
+  return measured.distance < mult * measured.atr
 }
 
 /** Direct 4h bias vs 1h structure conflict (prompt checklist). */

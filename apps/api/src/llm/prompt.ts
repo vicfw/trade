@@ -21,7 +21,7 @@ Decision checklist:
    - RSI above 50 for long or below 50 for short without an obviously exhausted move;
    - a recent swing break, retest, rejection, or higher-low/lower-high sequence;
    - confirming momentum or volume in the recent closed candles.
-4. Levels: entry must be actionable at the live price or a clearly justified nearby 15m trigger. Place the stop beyond a recent invalidation swing with a sensible ATR buffer, and target a visible swing/structure level.
+4. Levels: entry must be actionable at the live price or a clearly justified nearby 15m trigger. Place the stop beyond a recent invalidation swing with a sensible ATR buffer (not tighter than ~0.75×ATR — noise), and target a visible swing/structure level.
 5. Reward/risk: calculate abs(takeProfit-entry) / abs(entry-stopLoss). A trade requires reward/risk >= 1.5 after using technically valid levels; otherwise return no_trade.
 
 Rules:
@@ -44,7 +44,7 @@ Rules:
 - Do NOT invent news.
 - Do NOT output leverage, position size, account balance, quantity, risk %, or any sizing field. Sizing is computed separately in code.
 - Do NOT invent prices, patterns, or levels that are absent from the snapshot.
-- Downstream code may snap stopLoss/takeProfit to 15m swings with an ATR buffer (TP prefers a swing still beyond ticker.price), and will reject (no_trade) targets already through the live price, invalid reward/risk (< 1.5), fewer than two code-counted 15m confirmations (price vs EMA20/EMA50, RSI side, most-recent swing break), stop farther than 2×ATR from entry, direct 4h/1h opposition, or a side that fights fully aligned multi-TF context. Still propose technically valid levels; code is the final gate.
+- Downstream code may snap stopLoss/takeProfit to 15m swings with an ATR buffer (TP prefers a swing still beyond ticker.price), and will reject (no_trade) targets already through the live price, invalid reward/risk (< 1.5), fewer than two code-counted 15m confirmations (price vs EMA20/EMA50, RSI side, most-recent swing break), stop farther than 2×ATR or closer than 0.75×ATR from entry, direct 4h/1h opposition, or a side that fights fully aligned multi-TF context. Still propose technically valid levels; code is the final gate.
 
 JSON schema:
 {

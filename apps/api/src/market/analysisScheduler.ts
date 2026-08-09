@@ -1,9 +1,15 @@
 import type {
+  AnalysisScheduleStatus,
   BtcAnalysisStatusResponse,
   BtcPositionTestResponse,
 } from "@trade/shared"
 import { config } from "../config"
 import { analysisStore } from "./analysisStore"
+import {
+  clampToAnalysisWindow,
+  isWithinAnalysisWindow,
+  type AnalysisWindowOptions,
+} from "./analysisWindow"
 import {
   btcPositionTracker,
   positionKey,
@@ -94,6 +100,14 @@ export function buildAnalysisStatusResponse(): BtcAnalysisStatusResponse {
 
 type Clock = () => number
 
+function windowOptions(): AnalysisWindowOptions {
+  return {
+    timeZone: config.analysisTz,
+    start: config.analysisWindowStart,
+    end: config.analysisWindowEnd,
+  }
+}
+
 export class AnalysisScheduler {
   private timer: ReturnType<typeof setTimeout> | null = null
   private started = false
@@ -124,12 +138,7 @@ export class AnalysisScheduler {
     }
 
     console.log("[analysis] trade closed — queueing next analysis")
-    analysisStore.updateSchedule({
-      status: "idle",
-      nextAnalysisAt: this.now(),
-      lastError: null,
-    })
-    this.scheduleAt(this.now())
+    this.scheduleNext(this.now())
   }
 
   private clearTimer(): void {
@@ -139,12 +148,46 @@ export class AnalysisScheduler {
     }
   }
 
-  private scheduleAt(atMs: number): void {
+  private armTimer(atMs: number): void {
     this.clearTimer()
     const delay = Math.max(0, atMs - this.now())
     this.timer = setTimeout(() => {
       void this.runCycle()
     }, delay)
+  }
+
+  /**
+   * Clamp `atMs` into the analysis window, persist schedule status, and arm.
+   * Uses `waiting_window` when the requested time is outside the window.
+   */
+  private scheduleNext(
+    atMs: number,
+    opts?: { lastError?: string | null; preferErrorStatus?: boolean },
+  ): number {
+    const options = windowOptions()
+    // Never arm from a stale past timestamp (clamp is relative to atMs's day).
+    const target = Math.max(atMs, this.now())
+    const clamped = clampToAnalysisWindow(target, options)
+    const wasOutside = !isWithinAnalysisWindow(target, options)
+
+    let status: AnalysisScheduleStatus
+    if (opts?.preferErrorStatus) {
+      status = "error"
+    } else if (wasOutside) {
+      status = "waiting_window"
+    } else if (clamped <= this.now()) {
+      status = "idle"
+    } else {
+      status = "waiting_interval"
+    }
+
+    analysisStore.updateSchedule({
+      status,
+      nextAnalysisAt: clamped,
+      lastError: opts?.lastError !== undefined ? opts.lastError : null,
+    })
+    this.armTimer(clamped)
+    return clamped
   }
 
   private bootstrap(): void {
@@ -161,25 +204,20 @@ export class AnalysisScheduler {
     const latest = analysisStore.getLatestAnalysis()
     const nextAt = latest.schedule.nextAnalysisAt
     if (nextAt != null && nextAt > this.now()) {
-      analysisStore.updateSchedule({
-        status: "waiting_interval",
-        nextAnalysisAt: nextAt,
-        lastError: null,
-      })
+      const clamped = this.scheduleNext(nextAt)
       console.log(
-        `[analysis] bootstrap: next run in ${Math.round((nextAt - this.now()) / 1000)}s`,
+        `[analysis] bootstrap: next run in ${Math.round((clamped - this.now()) / 1000)}s`,
       )
-      this.scheduleAt(nextAt)
       return
     }
 
-    console.log("[analysis] bootstrap: running analysis now")
-    this.scheduleAt(this.now())
+    console.log("[analysis] bootstrap: queueing analysis")
+    this.scheduleNext(this.now())
   }
 
   private async runCycle(): Promise<void> {
     if (isSuggestInFlight()) {
-      this.scheduleAt(this.now() + 5_000)
+      this.armTimer(this.now() + 5_000)
       return
     }
 
@@ -190,6 +228,15 @@ export class AnalysisScheduler {
         nextAnalysisAt: null,
         lastError: null,
       })
+      return
+    }
+
+    const options = windowOptions()
+    if (!isWithinAnalysisWindow(this.now(), options)) {
+      const nextAt = this.scheduleNext(this.now())
+      console.log(
+        `[analysis] outside window — next at ${new Date(nextAt).toISOString()}`,
+      )
       return
     }
 
@@ -204,8 +251,9 @@ export class AnalysisScheduler {
       })
 
       if (response.suggestion.side === "no_trade") {
-        const nextAt = response.generatedAt + config.analysisIntervalMs
-        this.scheduleAt(nextAt)
+        const nextAt = this.scheduleNext(
+          response.generatedAt + config.analysisIntervalMs,
+        )
         console.log(
           `[analysis] no_trade — next at ${new Date(nextAt).toISOString()}`,
         )
@@ -224,34 +272,26 @@ export class AnalysisScheduler {
       console.log(
         `[analysis] trade ${response.suggestion.side} already resolved — queueing next analysis`,
       )
-      this.scheduleAt(this.now())
+      this.scheduleNext(this.now())
     } catch (err) {
-      if (
+      const deferred =
         err instanceof SuggestNotConfiguredError ||
         err instanceof SuggestNotReadyError ||
         err instanceof SuggestBusyError
-      ) {
-        const retryAt = this.now() + Math.min(config.analysisRetryMs, 60_000)
-        analysisStore.updateSchedule({
-          status: "error",
-          nextAnalysisAt: retryAt,
-          lastError: err.message,
-        })
-        console.error(`[analysis] deferred: ${err.message}`)
-        this.scheduleAt(retryAt)
-        return
-      }
-
       const message =
         err instanceof Error ? err.message : "Analysis run failed"
-      const retryAt = this.now() + config.analysisRetryMs
-      analysisStore.updateSchedule({
-        status: "error",
-        nextAnalysisAt: retryAt,
+      const retryAt =
+        this.now() +
+        (deferred
+          ? Math.min(config.analysisRetryMs, 60_000)
+          : config.analysisRetryMs)
+      this.scheduleNext(retryAt, {
         lastError: message,
+        preferErrorStatus: true,
       })
-      console.error(`[analysis] failed: ${message}`)
-      this.scheduleAt(retryAt)
+      console.error(
+        `[analysis] ${deferred ? "deferred" : "failed"}: ${message}`,
+      )
     }
   }
 }
