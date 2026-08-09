@@ -4,23 +4,31 @@ import {
   type KlineInterval,
 } from "@trade/shared";
 
-export type LlmProvider = "gapgpt" | "moonshot";
+export type LlmProvider = "gapgpt" | "moonshot" | "agentrouter";
 
-const LLM_PROVIDERS = ["gapgpt", "moonshot"] as const;
+const LLM_PROVIDERS = ["gapgpt", "moonshot", "agentrouter"] as const;
 
 const LLM_PROVIDER_DEFAULTS: Record<
   LlmProvider,
-  { baseUrl: string; model: string; apiKeyEnv: string }
+  { baseUrl: string; model: string; apiKeyEnv: string; baseUrlEnv: string }
 > = {
   gapgpt: {
     baseUrl: "https://api.gapgpt.app/v1",
     model: "deepseek-r1",
     apiKeyEnv: "GAPGPT_API_KEY",
+    baseUrlEnv: "GAPGPT_BASE_URL",
   },
   moonshot: {
     baseUrl: "https://api.moonshot.ai/v1",
     model: "kimi-k3",
     apiKeyEnv: "MOONSHOT_API_KEY",
+    baseUrlEnv: "MOONSHOT_BASE_URL",
+  },
+  agentrouter: {
+    baseUrl: "https://agentrouter.org/v1",
+    model: "claude-opus-4-8",
+    apiKeyEnv: "AGENTROUTER_API_KEY",
+    baseUrlEnv: "AGENTROUTER_BASE_URL",
   },
 };
 
@@ -111,22 +119,11 @@ function parseLlmProvider(raw: string | undefined): LlmProvider {
 
 function resolveLlmConfig(provider: LlmProvider) {
   const defaults = LLM_PROVIDER_DEFAULTS[provider];
-
-  if (provider === "gapgpt") {
-    return {
-      provider,
-      apiKey: process.env.GAPGPT_API_KEY ?? "",
-      apiKeyEnv: defaults.apiKeyEnv,
-      baseUrl: process.env.GAPGPT_BASE_URL ?? defaults.baseUrl,
-      model: defaults.model,
-    };
-  }
-
   return {
     provider,
-    apiKey: process.env.MOONSHOT_API_KEY ?? "",
+    apiKey: process.env[defaults.apiKeyEnv] ?? "",
     apiKeyEnv: defaults.apiKeyEnv,
-    baseUrl: process.env.MOONSHOT_BASE_URL ?? defaults.baseUrl,
+    baseUrl: process.env[defaults.baseUrlEnv] ?? defaults.baseUrl,
     model: defaults.model,
   };
 }
@@ -157,7 +154,7 @@ export const config = {
   dbPath: process.env.DB_PATH ?? "data/trade.db",
   /** HTF intervals for suggest / indicators / chart (perp store). */
   candleIntervals: parseIntervals(process.env.CANDLE_INTERVALS),
-  /** Active LLM backend: gapgpt or moonshot (Kimi). */
+  /** Active LLM backend: gapgpt, moonshot (Kimi), or agentrouter. */
   llm,
   /** deepseek-r1 and other reasoning models often need 1–3+ minutes. */
   llmTimeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 180_000),

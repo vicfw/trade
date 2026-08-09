@@ -11,7 +11,7 @@ function elapsedMs(startedAt: number): number {
 
 /**
  * OpenAI-compatible chat client for the active LLM_PROVIDER
- * (GapGPT or Moonshot / Kimi).
+ * (GapGPT, Moonshot / Kimi, or AgentRouter).
  */
 export class LlmClient {
   private client: OpenAI | null = null
