@@ -91,6 +91,8 @@ export type PositionTestStatus =
   | "failed"
   | "waiting"
   | "not_triggered"
+  /** Limit entry never filled before the entry timeout. */
+  | "expired"
 
 export type PositionTestHitReason = "take_profit" | "stop_loss"
 

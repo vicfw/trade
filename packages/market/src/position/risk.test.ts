@@ -408,5 +408,73 @@ describe("finalizeSuggestion", () => {
     expect(result.levels?.stopLoss).toBeCloseTo(98_750, 8)
     expect(result.levels?.takeProfit).toBe(103_000)
     expect(result.sizing?.riskReward).toBeGreaterThanOrEqual(1.5)
+    expect(result.rationale).toContain("Final levels after policy")
+    expect(result.rationale).toContain("take-profit 103000")
+  })
+
+  test("rejects when live price already through take-profit", () => {
+    const result = finalizeSuggestion(
+      {
+        side: "long",
+        entry: 100_000,
+        stopLoss: 99_000,
+        takeProfit: 100_500,
+        confidence: "medium",
+        rationale: "Stale pullback target",
+      },
+      rules,
+      {
+        ...longReadyCtx,
+        livePrice: 101_000,
+        entryIndicators: {
+          ...longReadyCtx.entryIndicators,
+          // No swings → keep LLM levels; live already through TP
+          swings: [],
+          atr14: 2_000,
+          lastClose: 101_000,
+        },
+      },
+    )
+    expect(result.side).toBe("no_trade")
+    expect(result.rationale).toMatch(/already reached take-profit/i)
+    expect(result.rationale).toMatch(/\nWatch:/)
+  })
+
+  test("keeps LLM TP above live when no higher 15m swing exists", () => {
+    const result = finalizeSuggestion(
+      {
+        side: "long",
+        entry: 100_000,
+        stopLoss: 98_000,
+        takeProfit: 106_000,
+        confidence: "high",
+        rationale: "Use higher target",
+      },
+      rules,
+      {
+        bias4h: "bull",
+        structure1h: "uptrend",
+        livePrice: 100_500,
+        entryIndicators: {
+          ema20: 99_000,
+          ema50: 98_000,
+          ema200: 97_000,
+          rsi14: 55,
+          atr14: 1_000,
+          lastClose: 100_500,
+          openTime: 1,
+          swings: [
+            { kind: "low", index: 1, openTime: 1, price: 99_000 },
+            // Only swing high is below live — keep LLM TP 106000
+            { kind: "high", index: 2, openTime: 2, price: 100_200 },
+          ],
+        },
+      },
+    )
+    expect(result.side).toBe("long")
+    expect(result.levels?.takeProfit).toBe(106_000)
+    expect(
+      result.warnings.some((w) => /keeping LLM take-profit/.test(w)),
+    ).toBe(true)
   })
 })

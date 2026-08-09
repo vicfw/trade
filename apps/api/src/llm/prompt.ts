@@ -44,7 +44,7 @@ Rules:
 - Do NOT invent news.
 - Do NOT output leverage, position size, account balance, quantity, risk %, or any sizing field. Sizing is computed separately in code.
 - Do NOT invent prices, patterns, or levels that are absent from the snapshot.
-- Downstream code may snap stopLoss/takeProfit to 15m swings with an ATR buffer, and will reject (no_trade) invalid reward/risk (< 1.5), fewer than two code-counted 15m confirmations (price vs EMA20/EMA50, RSI side, most-recent swing break), stop farther than 2×ATR from entry, direct 4h/1h opposition, or a side that fights fully aligned multi-TF context. Still propose technically valid levels; code is the final gate.
+- Downstream code may snap stopLoss/takeProfit to 15m swings with an ATR buffer (TP prefers a swing still beyond ticker.price), and will reject (no_trade) targets already through the live price, invalid reward/risk (< 1.5), fewer than two code-counted 15m confirmations (price vs EMA20/EMA50, RSI side, most-recent swing break), stop farther than 2×ATR from entry, direct 4h/1h opposition, or a side that fights fully aligned multi-TF context. Still propose technically valid levels; code is the final gate.
 
 JSON schema:
 {

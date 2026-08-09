@@ -56,5 +56,5 @@ console.log(
   `[api] llm provider=${config.llm.provider} model=${config.llm.model} base=${config.llm.baseUrl}`,
 )
 console.log(
-  `[api] auto-analysis intervalMs=${config.analysisIntervalMs} retryMs=${config.analysisRetryMs}`,
+  `[api] auto-analysis intervalMs=${config.analysisIntervalMs} entryTimeoutMs=${config.entryTimeoutMs} retryMs=${config.analysisRetryMs}`,
 )

@@ -137,6 +137,11 @@ export const config = {
   suggestCooldownMs: Number(process.env.SUGGEST_COOLDOWN_MS ?? 15_000),
   /** Auto re-analysis delay after no_trade (default 2h). */
   analysisIntervalMs: Number(process.env.ANALYSIS_INTERVAL_MS ?? 7_200_000),
+  /**
+   * Cancel unfilled limit entries after this long (default 2h).
+   * Filled positions (waiting for SL/TP) are not affected.
+   */
+  entryTimeoutMs: Number(process.env.ENTRY_TIMEOUT_MS ?? 7_200_000),
   /** Retry delay after a failed auto-analysis run. */
   analysisRetryMs: Number(process.env.ANALYSIS_RETRY_MS ?? 300_000),
 } as const;

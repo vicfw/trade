@@ -109,7 +109,7 @@ export async function runSuggest(
 
   if (hasOpenTrackedTrade()) {
     throw new SuggestBusyError(
-      "An open trade is still being tracked. Wait for take-profit or stop-loss before analyzing again.",
+      "An open trade is still being tracked. Wait for take-profit, stop-loss, or entry timeout before analyzing again.",
     )
   }
 
@@ -156,6 +156,7 @@ export async function runSuggest(
       bias4h: snapshot.context.bias4h,
       structure1h: snapshot.context.structure1h,
       entryIndicators: entryTf?.indicators ?? computeIntervalIndicators([]),
+      livePrice: snapshot.ticker.price,
     })
 
     lastSuggestAt = Date.now()

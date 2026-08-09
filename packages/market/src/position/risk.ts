@@ -13,6 +13,7 @@ import {
   countEntrySignals,
   isMultiTfOpposed,
   isStopTooWide,
+  isTakeProfitAlreadyThrough,
   MAX_STOP_ATR_MULT,
   MIN_ENTRY_SIGNALS,
   MIN_RISK_REWARD,
@@ -115,6 +116,8 @@ export interface FinalizeSuggestionContext {
   bias4h: MarketBias
   structure1h: MarketStructure
   entryIndicators: IntervalIndicators
+  /** Live BTCUSDT perpetual last price; used for actionable TP/entry gates. */
+  livePrice?: number | null
 }
 
 function noTradeResult(
@@ -144,6 +147,13 @@ function downgradeNoTrade(
     warnings,
     formatNoTradeRationale(failed, watch),
   )
+}
+
+function formatFinalLevelsNote(
+  levels: PositionLevels,
+  riskReward: number,
+): string {
+  return `Final levels after policy: entry ${levels.entry}, stop-loss ${levels.stopLoss}, take-profit ${levels.takeProfit} (R:R ${riskReward.toFixed(2)}).`
 }
 
 /**
@@ -212,7 +222,13 @@ export function finalizeSuggestion(
     takeProfit: proposal.takeProfit!,
   }
 
-  const snapped = snapTradeLevels(proposal.side, levels, ctx.entryIndicators)
+  const snapped = snapTradeLevels(
+    proposal.side,
+    levels,
+    ctx.entryIndicators,
+    undefined,
+    ctx.livePrice,
+  )
   levels = snapped.levels
   warnings.push(...snapped.warnings)
 
@@ -228,6 +244,18 @@ export function finalizeSuggestion(
       `Levels became invalid after snapping to 15m swings (${postSnapGeo[0]}).`,
       "Re-analyze when a nearby swing invalidation and target still leave valid long/short geometry after ATR buffering.",
       [...warnings, ...postSnapGeo],
+    )
+  }
+
+  if (
+    isTakeProfitAlreadyThrough(proposal.side, levels.takeProfit, ctx.livePrice)
+  ) {
+    const live = ctx.livePrice
+    return downgradeNoTrade(
+      proposal,
+      `Live price ${live} has already reached take-profit ${levels.takeProfit} before entry can fill.`,
+      "Re-check when a pullback entry and a take-profit still ahead of the live perpetual price yield reward/risk ≥ 1.5.",
+      warnings,
     )
   }
 
@@ -275,12 +303,18 @@ export function finalizeSuggestion(
     )
   }
 
+  const rationale = snapped.warnings.some((w) =>
+    /snapped to 15m swings/.test(w),
+  )
+    ? `${proposal.rationale.trim()}\n\n${formatFinalLevelsNote(levels, riskReward)}`
+    : proposal.rationale
+
   return {
     side: proposal.side,
     levels,
     sizing,
     confidence: proposal.confidence,
-    rationale: proposal.rationale,
+    rationale,
     warnings,
   }
 }

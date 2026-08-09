@@ -108,4 +108,32 @@ describe("PerpetualPositionTracker", () => {
     expect(result.status).toBe("not_triggered");
     expect(result.observationsChecked).toBe(1);
   });
+
+  test("expires unfilled entries after the entry timeout", () => {
+    const tracker = new PerpetualPositionTracker(60_000);
+    const since = SINCE + 50_000;
+    const request = longRequest({ since });
+
+    tracker.track(request, { price: 101_000, observedAt: since });
+    expect(tracker.get(request)!.status).toBe("not_triggered");
+
+    const expired = tracker.expireStaleEntries(since + 60_000);
+    expect(expired).toBe(1);
+    const result = tracker.get(request)!;
+    expect(result.status).toBe("expired");
+    expect(result.hitAt).toBe(since + 60_000);
+    expect(result.triggeredAt).toBeNull();
+  });
+
+  test("does not expire filled positions waiting on SL/TP", () => {
+    const tracker = new PerpetualPositionTracker(1_000);
+    const since = SINCE + 60_000;
+    const request = longRequest({ since });
+
+    tracker.track(request, { price: 99_500, observedAt: since });
+    expect(tracker.get(request)!.status).toBe("waiting");
+
+    expect(tracker.expireStaleEntries(since + 10_000)).toBe(0);
+    expect(tracker.get(request)!.status).toBe("waiting");
+  });
 });

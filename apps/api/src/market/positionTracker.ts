@@ -8,6 +8,8 @@ import type {
 const TRACKING_RETENTION_MS = 21 * 24 * 60 * 60 * 1000;
 const MAX_LIVE_TICKER_AGE_MS = 30_000;
 const MAX_FUTURE_CLOCK_SKEW_MS = 5_000;
+/** Default: cancel unfilled limit entries after 2h. */
+export const DEFAULT_ENTRY_TIMEOUT_MS = 7_200_000;
 
 export interface PerpPriceObservation {
   price: number;
@@ -103,7 +105,9 @@ function hitReason(
 }
 
 function isClosed(status: PositionTestStatus): boolean {
-  return status === "successful" || status === "failed";
+  return (
+    status === "successful" || status === "failed" || status === "expired"
+  );
 }
 
 function publicResult(position: TrackedPosition): TrackedPositionResult {
@@ -133,11 +137,26 @@ function snapshot(key: string, position: TrackedPosition): TrackedPositionSnapsh
  * spikes between ticks or API downtime are still caught.
  *
  * A tracked position only moves forward:
- * not_triggered -> waiting -> successful/failed.
+ * not_triggered -> waiting -> successful/failed
+ * not_triggered -> expired (entry timeout)
  */
 export class PerpetualPositionTracker {
   private positions = new Map<string, TrackedPosition>();
   private updateListener: UpdateListener | null = null;
+  private entryTimeoutMs: number;
+
+  constructor(entryTimeoutMs = DEFAULT_ENTRY_TIMEOUT_MS) {
+    this.entryTimeoutMs =
+      Number.isFinite(entryTimeoutMs) && entryTimeoutMs > 0
+        ? entryTimeoutMs
+        : DEFAULT_ENTRY_TIMEOUT_MS;
+  }
+
+  setEntryTimeoutMs(ms: number): void {
+    if (Number.isFinite(ms) && ms > 0) {
+      this.entryTimeoutMs = ms;
+    }
+  }
 
   /** Called after a position is created or changes status. */
   setOnUpdate(listener: UpdateListener | null): void {
@@ -171,6 +190,8 @@ export class PerpetualPositionTracker {
     if (initialObservation) {
       this.applyObservation(key, position, initialObservation);
     }
+
+    this.expireIfNeeded(key, position, Date.now());
 
     return publicResult(position);
   }
@@ -234,6 +255,7 @@ export class PerpetualPositionTracker {
     for (const [key, position] of this.positions) {
       this.applyObservation(key, position, observation);
     }
+    this.expireStaleEntries(observation.observedAt);
   }
 
   /**
@@ -261,7 +283,11 @@ export class PerpetualPositionTracker {
       changed = true;
     }
 
-    if (isClosed(outcome.status) && outcome.hitReason && outcome.hitAt != null) {
+    if (
+      (outcome.status === "successful" || outcome.status === "failed") &&
+      outcome.hitReason &&
+      outcome.hitAt != null
+    ) {
       position.status = outcome.status;
       position.hitAt = outcome.hitAt;
       position.hitReason = outcome.hitReason;
@@ -270,11 +296,36 @@ export class PerpetualPositionTracker {
     }
 
     if (changed) this.emit(key, position);
+    this.expireIfNeeded(key, position, Date.now());
     return publicResult(position);
+  }
+
+  /** Expire limit entries that never filled within the timeout. */
+  expireStaleEntries(now = Date.now()): number {
+    let expired = 0;
+    for (const [key, position] of this.positions) {
+      if (this.expireIfNeeded(key, position, now)) expired += 1;
+    }
+    return expired;
   }
 
   clear(): void {
     this.positions.clear();
+  }
+
+  private expireIfNeeded(
+    key: string,
+    position: TrackedPosition,
+    now: number,
+  ): boolean {
+    if (position.status !== "not_triggered") return false;
+    if (now - position.request.since < this.entryTimeoutMs) return false;
+
+    position.status = "expired";
+    position.hitAt = now;
+    position.hitReason = null;
+    this.emit(key, position);
+    return true;
   }
 
   private applyObservation(

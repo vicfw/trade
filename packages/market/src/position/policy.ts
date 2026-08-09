@@ -133,34 +133,57 @@ export function sideConflictsWithAlignedContext(
 function nearestSwing(
   swings: IntervalIndicators["swings"],
   kind: "high" | "low",
-  entry: number,
+  pivot: number,
   side: "below" | "above",
 ): number | null {
   const candidates = swings.filter((s) => {
     if (s.kind !== kind) return false
-    return side === "below" ? s.price < entry : s.price > entry
+    return side === "below" ? s.price < pivot : s.price > pivot
   })
   if (candidates.length === 0) return null
   candidates.sort(
-    (a, b) => Math.abs(a.price - entry) - Math.abs(b.price - entry),
+    (a, b) => Math.abs(a.price - pivot) - Math.abs(b.price - pivot),
   )
   return candidates[0]!.price
 }
 
+function finiteLivePrice(livePrice: number | null | undefined): number | null {
+  return livePrice != null && Number.isFinite(livePrice) && livePrice > 0
+    ? livePrice
+    : null
+}
+
+/**
+ * True when live price has already reached/passed take-profit before entry
+ * can fill (stale target relative to the market).
+ */
+export function isTakeProfitAlreadyThrough(
+  side: Exclude<TradeSide, "no_trade">,
+  takeProfit: number,
+  livePrice: number | null | undefined,
+): boolean {
+  const live = finiteLivePrice(livePrice)
+  if (live == null) return false
+  return side === "long" ? live >= takeProfit : live <= takeProfit
+}
+
 /**
  * Snap SL/TP to nearest 15m swings with an ATR buffer on the stop.
- * Entry is left unchanged. Falls back to LLM levels when structure is missing
- * or snap would break geometry.
+ * Entry is left unchanged. TP snaps to a swing still beyond live price when
+ * known (not merely the nearest swing above/below entry). Falls back to LLM
+ * levels when structure is missing or snap would break geometry.
  */
 export function snapTradeLevels(
   side: Exclude<TradeSide, "no_trade">,
   levels: PositionLevels,
   indicators: IntervalIndicators,
   atrBufferMult = ATR_STOP_BUFFER,
+  livePrice?: number | null,
 ): { levels: PositionLevels; warnings: string[] } {
   const warnings: string[] = []
   const atr = indicators.atr14
   const swings = indicators.swings
+  const live = finiteLivePrice(livePrice)
 
   if (atr == null || !(atr > 0) || swings.length === 0) {
     warnings.push(
@@ -183,12 +206,18 @@ export function snapTradeLevels(
       warnings.push("No swing low below entry for SL snap")
     }
 
-    const swingHigh = nearestSwing(swings, "high", levels.entry, "above")
+    // TP must stay ahead of both entry and live price (pullback longs).
+    const tpFloor = live != null ? Math.max(levels.entry, live) : levels.entry
+    const swingHigh = nearestSwing(swings, "high", tpFloor, "above")
     if (swingHigh != null) {
       takeProfit = swingHigh
       snappedTp = true
+    } else if (levels.takeProfit > tpFloor) {
+      warnings.push(
+        "No 15m swing high above live price; keeping LLM take-profit",
+      )
     } else {
-      warnings.push("No swing high above entry for TP snap")
+      warnings.push("No actionable swing high above entry/live for TP snap")
     }
   } else {
     const swingHigh = nearestSwing(swings, "high", levels.entry, "above")
@@ -199,12 +228,17 @@ export function snapTradeLevels(
       warnings.push("No swing high above entry for SL snap")
     }
 
-    const swingLow = nearestSwing(swings, "low", levels.entry, "below")
+    const tpCeiling = live != null ? Math.min(levels.entry, live) : levels.entry
+    const swingLow = nearestSwing(swings, "low", tpCeiling, "below")
     if (swingLow != null) {
       takeProfit = swingLow
       snappedTp = true
+    } else if (levels.takeProfit < tpCeiling) {
+      warnings.push(
+        "No 15m swing low below live price; keeping LLM take-profit",
+      )
     } else {
-      warnings.push("No swing low below entry for TP snap")
+      warnings.push("No actionable swing low below entry/live for TP snap")
     }
   }
 

@@ -158,7 +158,8 @@ export class TradeStore {
         status !== "not_triggered" &&
         status !== "waiting" &&
         status !== "successful" &&
-        status !== "failed"
+        status !== "failed" &&
+        status !== "expired"
       ) {
         continue
       }

@@ -79,6 +79,8 @@ function testStatusLabel(status: BtcPositionTestResponse["status"]) {
       return "Triggered"
     case "not_triggered":
       return "Not triggered"
+    case "expired":
+      return "Expired"
     default:
       return status
   }
@@ -135,7 +137,7 @@ const scheduleSummary = computed(() => {
     return "Analyzing market…"
   }
   if (status === "waiting_trade") {
-    return "Waiting for trade result (take-profit or stop-loss)."
+    return "Waiting for entry fill or trade result (take-profit / stop-loss)."
   }
   if (status === "waiting_interval" || props.suggestion?.side === "no_trade") {
     const relative = nextAnalysisRelative.value
@@ -345,6 +347,13 @@ const scheduleSummary = computed(() => {
               Take-profit hit at {{ formatDateTime(openPosition.hitAt) }}
               <template v-if="openPosition.triggeredAt">
                 (entered {{ formatDateTime(openPosition.triggeredAt) }})
+              </template>
+              .
+            </span>
+            <span v-else-if="openPosition.status === 'expired'">
+              Entry never filled — cancelled after the entry timeout
+              <template v-if="openPosition.hitAt">
+                at {{ formatDateTime(openPosition.hitAt) }}
               </template>
               .
             </span>
@@ -625,6 +634,10 @@ const scheduleSummary = computed(() => {
 
 .suggest__test-state[data-status="not_triggered"] .suggest__test-status {
   color: #6b5f3a;
+}
+
+.suggest__test-state[data-status="expired"] .suggest__test-status {
+  color: #7a8470;
 }
 
 .suggest__rationale-title {

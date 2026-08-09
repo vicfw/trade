@@ -27,6 +27,7 @@ export {
   isMultiTfOpposed,
   sideConflictsWithAlignedContext,
   snapTradeLevels,
+  isTakeProfitAlreadyThrough,
   countEntrySignals,
   isStopTooWide,
   MIN_RISK_REWARD,

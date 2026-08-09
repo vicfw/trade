@@ -1,4 +1,5 @@
 import { evaluatePositionOutcome } from "@trade/market"
+import { config } from "../config"
 import { db } from "../db"
 import { analysisStore } from "./analysisStore"
 import { btcPositionTracker } from "./positionTracker"
@@ -18,9 +19,15 @@ const RECONCILE_EVERY_MS = 60_000
 type TradeClosedListener = (key: string) => void
 let tradeClosedListener: TradeClosedListener | null = null
 
-/** Called when a tracked position closes (successful/failed). */
+/** Called when a tracked position closes (successful/failed/expired). */
 export function setOnTradeClosed(listener: TradeClosedListener | null): void {
   tradeClosedListener = listener
+}
+
+function isTerminalStatus(status: string): boolean {
+  return (
+    status === "successful" || status === "failed" || status === "expired"
+  )
 }
 
 /**
@@ -29,8 +36,10 @@ export function setOnTradeClosed(listener: TradeClosedListener | null): void {
  * offline for (candles persist; tick state does not advance while down).
  */
 export function reconcileTrackedPositions(now = Date.now()): void {
+  btcPositionTracker.expireStaleEntries(now)
+
   for (const position of btcPositionTracker.list()) {
-    if (position.status === "successful" || position.status === "failed") {
+    if (isTerminalStatus(position.status)) {
       continue
     }
 
@@ -71,18 +80,22 @@ let reconcileTimer: ReturnType<typeof setInterval> | null = null
  * start the periodic candle reconciliation sweep.
  */
 export function initPositionTracking(): void {
-  btcPositionTracker.restore(tradeStore.loadPositions())
+  btcPositionTracker.setEntryTimeoutMs(config.entryTimeoutMs)
 
   btcPositionTracker.setOnUpdate((snapshot) => {
     tradeStore.upsertPosition(snapshot)
-    const closed =
-      snapshot.status === "successful" || snapshot.status === "failed"
+    const closed = isTerminalStatus(snapshot.status)
+    // Win/loss history only — expired means the limit never filled.
     tradeStore.recordFromSnapshot(snapshot)
+    if (snapshot.status === "expired") {
+      analysisStore.clearOpenTradeMeta(snapshot.key)
+    }
     if (closed) {
       tradeClosedListener?.(snapshot.key)
     }
   })
 
+  btcPositionTracker.restore(tradeStore.loadPositions())
   reconcileTrackedPositions()
 
   if (!reconcileTimer) {

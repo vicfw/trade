@@ -4,6 +4,7 @@ import {
   countEntrySignals,
   isMultiTfOpposed,
   isStopTooWide,
+  isTakeProfitAlreadyThrough,
   MAX_STOP_ATR_MULT,
   sideConflictsWithAlignedContext,
   snapTradeLevels,
@@ -159,6 +160,31 @@ describe("snapTradeLevels", () => {
     expect(result.levels.entry).toBe(100_000)
   })
 
+  test("snaps long TP to swing still above live price", () => {
+    const levels: PositionLevels = {
+      entry: 100_000,
+      stopLoss: 98_000,
+      takeProfit: 110_000,
+    }
+    // Live already past 102k swing; next high above live is 103000
+    const result = snapTradeLevels("long", levels, baseIndicators, undefined, 102_500)
+    expect(result.levels.takeProfit).toBe(103_000)
+    expect(result.levels.stopLoss).toBeCloseTo(99_475, 8)
+  })
+
+  test("keeps LLM TP when no swing remains above live price", () => {
+    const levels: PositionLevels = {
+      entry: 100_000,
+      stopLoss: 98_000,
+      takeProfit: 110_000,
+    }
+    const result = snapTradeLevels("long", levels, baseIndicators, undefined, 104_000)
+    expect(result.levels.takeProfit).toBe(110_000)
+    expect(
+      result.warnings.some((w) => /keeping LLM take-profit/.test(w)),
+    ).toBe(true)
+  })
+
   test("keeps LLM levels when ATR missing", () => {
     const levels: PositionLevels = {
       entry: 100_000,
@@ -173,5 +199,17 @@ describe("snapTradeLevels", () => {
     expect(result.warnings.some((w) => /missing 15m swings or ATR/.test(w))).toBe(
       true,
     )
+  })
+})
+
+describe("isTakeProfitAlreadyThrough", () => {
+  test("detects long TP already through live", () => {
+    expect(isTakeProfitAlreadyThrough("long", 64_978, 65_200)).toBe(true)
+    expect(isTakeProfitAlreadyThrough("long", 65_357, 65_200)).toBe(false)
+  })
+
+  test("detects short TP already through live", () => {
+    expect(isTakeProfitAlreadyThrough("short", 94_000, 93_500)).toBe(true)
+    expect(isTakeProfitAlreadyThrough("short", 94_000, 95_000)).toBe(false)
   })
 })
