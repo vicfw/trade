@@ -32,6 +32,16 @@ const {
 
 const chartLevels = computed(() => {
   if (!suggestion.value || suggestion.value.side === "no_trade") return null;
+  // Drop Entry/SL/TP once the trade is done — expired, TP, or SL.
+  const status = openPosition.value?.status;
+  if (
+    status == null ||
+    status === "expired" ||
+    status === "successful" ||
+    status === "failed"
+  ) {
+    return null;
+  }
   return suggestion.value.levels;
 });
 </script>
