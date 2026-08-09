@@ -55,77 +55,113 @@ describe("sideConflictsWithAlignedContext", () => {
 })
 
 describe("countEntrySignals", () => {
-  test("counts long confirmations (EMA + RSI; no swing break)", () => {
-    const result = countEntrySignals("long", baseIndicators)
-    // close > ema20, > ema50, rsi > 50; most recent swing high is 102000 (not broken)
-    expect(result.count).toBe(3)
+  const hhHlSwings = [
+    { kind: "low" as const, index: 1, openTime: 1, price: 98_000 },
+    { kind: "high" as const, index: 2, openTime: 2, price: 101_000 },
+    { kind: "low" as const, index: 3, openTime: 3, price: 99_000 },
+    { kind: "high" as const, index: 4, openTime: 4, price: 102_000 },
+  ]
+
+  test("counts long PA confirmations (sequence + hold; no break / structure)", () => {
+    const result = countEntrySignals(
+      "long",
+      {
+        ...baseIndicators,
+        lastClose: 100_000,
+        swings: hhHlSwings,
+      },
+      "unclear",
+    )
+    // HH+HL sequence, pullback hold above last HL 99000; most recent high 102000 not broken
+    expect(result.count).toBe(2)
     expect(result.flags).toEqual({
-      priceVsEma20: true,
-      priceVsEma50: true,
-      rsiSide: true,
       swingBreak: false,
+      swingSequence: true,
+      pullbackHold: true,
+      structureAgree: false,
     })
   })
 
-  test("detects long swing break of most recent high", () => {
-    const result = countEntrySignals("long", {
-      ...baseIndicators,
-      lastClose: 102_500,
-    })
+  test("detects long swing break and structure agree", () => {
+    const result = countEntrySignals(
+      "long",
+      {
+        ...baseIndicators,
+        lastClose: 102_500,
+        swings: hhHlSwings,
+      },
+      "uptrend",
+    )
     expect(result.flags.swingBreak).toBe(true)
+    expect(result.flags.structureAgree).toBe(true)
     expect(result.count).toBe(4)
   })
 
-  test("counts short confirmations", () => {
-    const result = countEntrySignals("short", {
-      ...baseIndicators,
-      ema20: 101_000,
-      ema50: 102_000,
-      rsi14: 40,
-      lastClose: 100_000,
-      swings: [
-        { kind: "high", index: 1, openTime: 1, price: 101_000 },
-        { kind: "low", index: 2, openTime: 2, price: 99_000 },
-      ],
-    })
-    // close < ema20, < ema50, rsi < 50; most recent low 99000 not broken
-    expect(result.count).toBe(3)
+  test("counts short PA confirmations", () => {
+    const lhLlSwings = [
+      { kind: "high" as const, index: 1, openTime: 1, price: 103_000 },
+      { kind: "low" as const, index: 2, openTime: 2, price: 100_000 },
+      { kind: "high" as const, index: 3, openTime: 3, price: 101_000 },
+      { kind: "low" as const, index: 4, openTime: 4, price: 99_000 },
+    ]
+    const result = countEntrySignals(
+      "short",
+      {
+        ...baseIndicators,
+        lastClose: 100_500,
+        swings: lhLlSwings,
+      },
+      "unclear",
+    )
+    // LH+LL + hold below last LH 101000; most recent low 99000 not broken
+    expect(result.count).toBe(2)
     expect(result.flags.swingBreak).toBe(false)
+    expect(result.flags.swingSequence).toBe(true)
+    expect(result.flags.pullbackHold).toBe(true)
+    expect(result.flags.structureAgree).toBe(false)
   })
 
   test("detects short swing break of most recent low", () => {
-    const result = countEntrySignals("short", {
-      ...baseIndicators,
-      ema20: 101_000,
-      ema50: 102_000,
-      rsi14: 40,
-      lastClose: 99_000,
-      swings: [
-        { kind: "high", index: 1, openTime: 1, price: 101_000 },
-        { kind: "low", index: 2, openTime: 2, price: 100_500 },
-      ],
-    })
+    const result = countEntrySignals(
+      "short",
+      {
+        ...baseIndicators,
+        lastClose: 98_500,
+        swings: [
+          { kind: "high", index: 1, openTime: 1, price: 103_000 },
+          { kind: "low", index: 2, openTime: 2, price: 100_000 },
+          { kind: "high", index: 3, openTime: 3, price: 101_000 },
+          { kind: "low", index: 4, openTime: 4, price: 99_000 },
+        ],
+      },
+      "downtrend",
+    )
     expect(result.flags.swingBreak).toBe(true)
+    expect(result.flags.structureAgree).toBe(true)
     expect(result.count).toBe(4)
   })
 
-  test("missing indicators count as false", () => {
-    const result = countEntrySignals("long", {
-      ema20: null,
-      ema50: null,
-      ema200: null,
-      rsi14: null,
-      atr14: null,
-      lastClose: null,
-      openTime: null,
-      swings: [],
-    })
+  test("missing swings and unclear structure count as false", () => {
+    const result = countEntrySignals(
+      "long",
+      {
+        ema20: null,
+        ema50: null,
+        ema200: null,
+        rsi14: null,
+        atr14: null,
+        lastClose: null,
+        openTime: null,
+        swings: [],
+      },
+      "unclear",
+    )
     expect(result.count).toBe(0)
     expect(result.flags).toEqual({
-      priceVsEma20: false,
-      priceVsEma50: false,
-      rsiSide: false,
       swingBreak: false,
+      swingSequence: false,
+      pullbackHold: false,
+      structureAgree: false,
     })
   })
 })

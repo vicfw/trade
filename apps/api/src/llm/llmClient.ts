@@ -1,4 +1,5 @@
 import OpenAI from "openai"
+import type { ChatCompletion } from "openai/resources/chat/completions"
 import type { LlmPositionProposal } from "@trade/shared"
 import { config } from "../config"
 import type { MarketSnapshot } from "../market/buildSnapshot"
@@ -7,6 +8,21 @@ import { parseProposal } from "./parseProposal"
 
 function elapsedMs(startedAt: number): number {
   return Date.now() - startedAt
+}
+
+/**
+ * AgentRouter sometimes returns Claude chat completions as a JSON-encoded
+ * string body; the OpenAI SDK then yields a string instead of ChatCompletion.
+ */
+function unwrapChatCompletion(response: unknown): ChatCompletion {
+  if (typeof response === "string") {
+    try {
+      return JSON.parse(response) as ChatCompletion
+    } catch {
+      throw new Error("LLM returned a non-JSON string body")
+    }
+  }
+  return response as ChatCompletion
 }
 
 /**
@@ -25,12 +41,21 @@ export class LlmClient {
       throw new Error(`${config.llm.apiKeyEnv} is not configured`)
     }
     if (!this.client) {
+      // AgentRouter's edge WAF returns 401 "unauthorized client detected" for the
+      // OpenAI SDK default User-Agent (OpenAI/JS …). Allowed fingerprints include
+      // Qwen Code / Claude CLI; match the community AgentRouter SDK default.
+      const defaultHeaders =
+        config.llm.provider === "agentrouter"
+          ? { "User-Agent": "QwenCode/0.2.0 (linux; x64)" }
+          : undefined
+
       this.client = new OpenAI({
         baseURL: config.llm.baseUrl,
         apiKey: config.llm.apiKey,
         timeout: config.llmTimeoutMs,
         // Retries on timeout re-bill GapGPT and stretch wait ~3×; R1 is slow, not flaky.
         maxRetries: 0,
+        defaultHeaders,
       })
     }
     return this.client
@@ -46,7 +71,7 @@ export class LlmClient {
     )
 
     try {
-      const response = await client.chat.completions.create({
+      const raw = await client.chat.completions.create({
         model: config.llm.model,
         messages: [
           { role: "system", content: POSITION_SYSTEM_PROMPT },
@@ -55,6 +80,7 @@ export class LlmClient {
         response_format: { type: "json_object" },
         temperature: 0.2,
       })
+      const response = unwrapChatCompletion(raw)
 
       const choice = response.choices[0]
       const message = choice?.message

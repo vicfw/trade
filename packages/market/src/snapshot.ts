@@ -69,17 +69,6 @@ export function computeIntervalIndicators(
   };
 }
 
-export function computeBias4h(indicators: IntervalIndicators): MarketBias {
-  const { lastClose, ema50, ema200, rsi14 } = indicators;
-  if (lastClose == null || ema50 == null || ema200 == null || rsi14 == null) {
-    return "neutral";
-  }
-
-  if (lastClose > ema50 && ema50 > ema200 && rsi14 >= 45) return "bull";
-  if (lastClose < ema50 && ema50 < ema200 && rsi14 <= 55) return "bear";
-  return "neutral";
-}
-
 /**
  * 1h market structure from swing pivots.
  *
@@ -122,11 +111,27 @@ export function computeStructure1h(
   return "unclear";
 }
 
+/**
+ * 4h bias from swing structure (same rules as 1h structure).
+ * EMA/RSI are not used — they remain soft snapshot context only.
+ */
+export function computeBias4h(
+  indicators: IntervalIndicators,
+  referencePrice?: number | null,
+): MarketBias {
+  const structure = computeStructure1h(indicators, referencePrice);
+  if (structure === "uptrend") return "bull";
+  if (structure === "downtrend") return "bear";
+  return "neutral";
+}
+
 export function computeMultiTfContext(
   byInterval: Partial<Record<KlineInterval, IntervalIndicators>>,
   referencePrice?: number | null,
 ): MultiTfContext {
-  const bias4h = byInterval["4h"] ? computeBias4h(byInterval["4h"]) : "neutral";
+  const bias4h = byInterval["4h"]
+    ? computeBias4h(byInterval["4h"], referencePrice)
+    : "neutral";
   const structure1h = byInterval["1h"]
     ? computeStructure1h(byInterval["1h"], referencePrice)
     : "unclear";

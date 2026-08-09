@@ -92,18 +92,87 @@ describe("findSwings", () => {
 });
 
 describe("multi-tf context helpers", () => {
-  test("bias4h bull when stacked EMAs and RSI supportive", () => {
+  test("bias4h bull on HH + HL structure", () => {
     const indicators: IntervalIndicators = {
-      ema20: 105,
-      ema50: 100,
-      ema200: 90,
-      rsi14: 55,
-      atr14: 2,
+      ema20: null,
+      ema50: null,
+      ema200: null,
+      rsi14: null,
+      atr14: null,
       lastClose: 110,
       openTime: 1,
-      swings: [],
+      swings: [
+        { kind: "high", index: 1, openTime: 1, price: 100 },
+        { kind: "low", index: 2, openTime: 2, price: 80 },
+        { kind: "high", index: 3, openTime: 3, price: 120 },
+        { kind: "low", index: 4, openTime: 4, price: 90 },
+      ],
     };
     expect(computeBias4h(indicators)).toBe("bull");
+  });
+
+  test("bias4h bear on LH + LL structure", () => {
+    const indicators: IntervalIndicators = {
+      ema20: null,
+      ema50: null,
+      ema200: null,
+      rsi14: null,
+      atr14: null,
+      lastClose: 95,
+      openTime: 5,
+      swings: [
+        { kind: "high", index: 1, openTime: 1, price: 120 },
+        { kind: "low", index: 2, openTime: 2, price: 90 },
+        { kind: "high", index: 3, openTime: 3, price: 110 },
+        { kind: "low", index: 4, openTime: 4, price: 80 },
+      ],
+    };
+    expect(computeBias4h(indicators)).toBe("bear");
+  });
+
+  test("bias4h bull on bullish break of structure", () => {
+    const indicators: IntervalIndicators = {
+      ema20: null,
+      ema50: null,
+      ema200: null,
+      rsi14: null,
+      atr14: null,
+      lastClose: 64_800,
+      openTime: 5,
+      swings: [
+        { kind: "high", index: 1, openTime: 1, price: 65_200 },
+        { kind: "low", index: 2, openTime: 2, price: 63_500 },
+        { kind: "high", index: 3, openTime: 3, price: 64_961.9 },
+        { kind: "low", index: 4, openTime: 4, price: 63_200 },
+      ],
+    };
+    expect(computeBias4h(indicators)).toBe("bear");
+    expect(computeBias4h(indicators, 65_333.8)).toBe("bull");
+  });
+
+  test("bias4h neutral on range / unclear", () => {
+    const range: IntervalIndicators = {
+      ema20: null,
+      ema50: null,
+      ema200: null,
+      rsi14: null,
+      atr14: null,
+      lastClose: 105,
+      openTime: 5,
+      swings: [
+        { kind: "high", index: 1, openTime: 1, price: 100 },
+        { kind: "low", index: 2, openTime: 2, price: 90 },
+        { kind: "high", index: 3, openTime: 3, price: 120 },
+        { kind: "low", index: 4, openTime: 4, price: 80 },
+      ],
+    };
+    expect(computeBias4h(range)).toBe("neutral");
+
+    const unclear: IntervalIndicators = {
+      ...range,
+      swings: [{ kind: "high", index: 1, openTime: 1, price: 100 }],
+    };
+    expect(computeBias4h(unclear)).toBe("neutral");
   });
 
   test("structure1h uptrend on HH + HL", () => {

@@ -247,12 +247,16 @@ export function finalizeSuggestion(
     )
   }
 
-  const signals = countEntrySignals(proposal.side, ctx.entryIndicators)
+  const signals = countEntrySignals(
+    proposal.side,
+    ctx.entryIndicators,
+    ctx.structure1h,
+  )
   if (signals.count < MIN_ENTRY_SIGNALS) {
     return downgradeNoTrade(
       proposal,
-      `Only ${signals.count}/${MIN_ENTRY_SIGNALS} required 15m confirmations (ema20=${signals.flags.priceVsEma20}, ema50=${signals.flags.priceVsEma50}, rsi=${signals.flags.rsiSide}, swingBreak=${signals.flags.swingBreak}).`,
-      `Re-check on a 15m close with at least two of: price on the ${proposal.side} side of EMA20 and EMA50, RSI on the ${proposal.side} side of 50, or a confirming swing break.`,
+      `Only ${signals.count}/${MIN_ENTRY_SIGNALS} required entry confirmations (swingBreak=${signals.flags.swingBreak}, swingSequence=${signals.flags.swingSequence}, pullbackHold=${signals.flags.pullbackHold}, structureAgree=${signals.flags.structureAgree}).`,
+      `Re-check with at least two of: a confirming swing break/BOS, HH+HL or LH+LL sequence, pullback hold of the last supportive swing, or 1h structure agreeing with ${proposal.side}.`,
     )
   }
 

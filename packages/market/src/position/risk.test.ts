@@ -171,10 +171,10 @@ describe("finalizeSuggestion", () => {
     maxLeverage: 10,
   }
 
-  /** ≥2 long signals; ATR large enough that typical stops stay within 2×ATR. */
+  /** ≥2 long PA signals; ATR large enough that typical stops stay within 2×ATR. */
   const longReadyCtx: FinalizeSuggestionContext = {
     bias4h: "neutral",
-    structure1h: "unclear",
+    structure1h: "uptrend",
     entryIndicators: {
       ema20: 99_000,
       ema50: 98_000,
@@ -184,8 +184,11 @@ describe("finalizeSuggestion", () => {
       lastClose: 100_000,
       openTime: 1,
       swings: [
-        { kind: "low", index: 1, openTime: 1, price: 99_000 },
-        { kind: "high", index: 2, openTime: 2, price: 103_000 },
+        { kind: "low", index: 1, openTime: 1, price: 98_000 },
+        // Prior high below entry so snap TP uses the farther 106k swing (RR ≥ 1.5)
+        { kind: "high", index: 2, openTime: 2, price: 99_500 },
+        { kind: "low", index: 3, openTime: 3, price: 99_000 },
+        { kind: "high", index: 4, openTime: 4, price: 106_000 },
       ],
     },
   }
@@ -258,8 +261,8 @@ describe("finalizeSuggestion", () => {
         ...longReadyCtx,
         entryIndicators: {
           ...longReadyCtx.entryIndicators,
-          // Empty swings → no snap; keep LLM levels for RR check
-          swings: [],
+          // High below close → swingBreak; no snap (no usable SL/TP swings)
+          swings: [{ kind: "high", index: 1, openTime: 1, price: 99_000 }],
           atr14: 1_000,
         },
       },
@@ -329,13 +332,14 @@ describe("finalizeSuggestion", () => {
           atr14: 2_000,
           lastClose: 100_000,
           openTime: 1,
+          // Single opposing high not broken — zero PA confirmations
           swings: [{ kind: "high", index: 1, openTime: 1, price: 105_000 }],
         },
       },
     )
     expect(result.side).toBe("no_trade")
     expect(result.warnings).toEqual([])
-    expect(result.rationale).toMatch(/^Failed:.*15m confirmations/i)
+    expect(result.rationale).toMatch(/^Failed:.*entry confirmations/i)
     expect(result.rationale).toMatch(/\nWatch:/)
   })
 
@@ -362,8 +366,10 @@ describe("finalizeSuggestion", () => {
           lastClose: 100_000,
           openTime: 1,
           swings: [
-            { kind: "low", index: 1, openTime: 1, price: 99_000 },
-            { kind: "high", index: 2, openTime: 2, price: 103_000 },
+            { kind: "low", index: 1, openTime: 1, price: 98_000 },
+            { kind: "high", index: 2, openTime: 2, price: 101_000 },
+            { kind: "low", index: 3, openTime: 3, price: 99_000 },
+            { kind: "high", index: 4, openTime: 4, price: 103_000 },
           ],
         },
       },
@@ -394,10 +400,15 @@ describe("finalizeSuggestion", () => {
           ema200: 97_000,
           rsi14: 55,
           atr14: 400,
-          lastClose: 100_000,
+          lastClose: 100_500,
           openTime: 1,
-          // No swing low below entry → keep LLM stop; distance 100 < 0.75*400
-          swings: [{ kind: "high", index: 2, openTime: 2, price: 101_500 }],
+          // Lows above entry → no SL snap; keep LLM stop distance 100 < 0.75*400
+          swings: [
+            { kind: "low", index: 1, openTime: 1, price: 100_100 },
+            { kind: "high", index: 2, openTime: 2, price: 100_500 },
+            { kind: "low", index: 3, openTime: 3, price: 100_200 },
+            { kind: "high", index: 4, openTime: 4, price: 101_500 },
+          ],
         },
       },
     )
@@ -429,8 +440,10 @@ describe("finalizeSuggestion", () => {
           lastClose: 100_000,
           openTime: 1,
           swings: [
-            { kind: "low", index: 1, openTime: 1, price: 99_000 },
-            { kind: "high", index: 2, openTime: 2, price: 103_000 },
+            { kind: "low", index: 1, openTime: 1, price: 98_000 },
+            { kind: "high", index: 2, openTime: 2, price: 99_500 },
+            { kind: "low", index: 3, openTime: 3, price: 99_000 },
+            { kind: "high", index: 4, openTime: 4, price: 103_000 },
           ],
         },
       },
@@ -460,8 +473,8 @@ describe("finalizeSuggestion", () => {
         livePrice: 101_000,
         entryIndicators: {
           ...longReadyCtx.entryIndicators,
-          // No swings → keep LLM levels; live already through TP
-          swings: [],
+          // Swing break + structureAgree; no snap — live already through TP
+          swings: [{ kind: "high", index: 1, openTime: 1, price: 99_000 }],
           atr14: 2_000,
           lastClose: 101_000,
         },
@@ -496,9 +509,11 @@ describe("finalizeSuggestion", () => {
           lastClose: 100_500,
           openTime: 1,
           swings: [
-            { kind: "low", index: 1, openTime: 1, price: 99_000 },
-            // Only swing high is below live — keep LLM TP 106000
-            { kind: "high", index: 2, openTime: 2, price: 100_200 },
+            { kind: "low", index: 1, openTime: 1, price: 98_000 },
+            { kind: "high", index: 2, openTime: 2, price: 99_500 },
+            { kind: "low", index: 3, openTime: 3, price: 99_000 },
+            // Only swing high below live — keep LLM TP 106000
+            { kind: "high", index: 4, openTime: 4, price: 100_200 },
           ],
         },
       },
